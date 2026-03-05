@@ -131,7 +131,7 @@ export default function App() {
   const yFmtPct = v => `${(v*100).toFixed(0)}%`;
 
   return (
-    <div style={{minHeight:"100vh",background:"#070d1a",color:"#e2e8f0",fontFamily:"'IBM Plex Mono',monospace",padding:"28px 24px"}}>
+    <div style={{minHeight:"100vh",background:"#070d1a",color:"#e2e8f0",fontFamily:"'IBM Plex Mono',monospace",padding:"28px 24px"}} id="main-wrap">
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;700&family=Syne:wght@700;800&display=swap');
         *{box-sizing:border-box;margin:0;padding:0}
@@ -151,16 +151,33 @@ export default function App() {
         .mdl{background:#0d1929;border:1px solid #253348;border-radius:16px;padding:28px;width:540px;max-height:88vh;overflow-y:auto;max-width:100%}
         .tb{background:none;border:none;cursor:pointer;font-family:inherit;transition:all .15s;padding:8px 16px;font-size:11px;letter-spacing:.1em;text-transform:uppercase}
         .tb:hover{color:#f0b429}
+        .kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px}
+        .best-worst-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+        .insurance-summary-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+        .tab-bar{display:flex;margin-bottom:20px;border-bottom:1px solid #1e293b;overflow-x:auto;-webkit-overflow-scrolling:touch}
+        .tab-bar::-webkit-scrollbar{display:none}
+        .header-row{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:28px;flex-wrap:wrap;gap:16px}
+        .header-right{display:flex;flex-direction:column;align-items:flex-end;gap:8px}
+        #main-wrap{padding:16px 12px!important} @media(max-width:640px){
+          .kpi-grid{grid-template-columns:repeat(2,1fr)!important}
+          .best-worst-grid{grid-template-columns:1fr!important}
+          .insurance-summary-grid{grid-template-columns:1fr!important}
+          .header-row{flex-direction:column}
+          .header-right{align-items:flex-start}
+          body{font-size:13px}
+          .card{padding:16px}
+          .mdl{padding:20px}
+        }
       `}</style>
 
       {/* ── HEADER ── */}
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:28,flexWrap:"wrap",gap:16}}>
+      <div className="header-row">
         <div>
           <div style={{fontSize:10,color:"#475569",letterSpacing:".15em",marginBottom:4}}>PERSONAL FINANCE</div>
           <h1 style={{fontFamily:"Syne,sans-serif",fontSize:26,fontWeight:800,color:"#f8fafc",letterSpacing:"-.02em"}}>Portfolio Dashboard</h1>
           <div style={{fontSize:11,color:"#475569",marginTop:4}}>{earliest.Date} → {latest.Date} · {data.length} months{custom.length>0&&<span style={{color:"#f0b42999",marginLeft:8}}>· {custom.length} custom</span>}</div>
         </div>
-        <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:8}}>
+        <div className="header-right">
           <div style={{display:"flex",gap:8,alignItems:"center"}}>
             {/* Eye toggle */}
             <button className={`eye-btn${blurred?" active":""}`} onClick={()=>setBlurred(b=>!b)} title={blurred?"Show values":"Hide values"}>
@@ -181,7 +198,7 @@ export default function App() {
       </div>
 
       {/* ── KPI CARDS ── */}
-      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:24}}>
+      <div className="kpi-grid">
         {[
           {l:"TOTAL RETURN",   v:fmtPct(latest["Cumm Return"]), s:<>From <Amt v={`$${fmt(earliest.Total)}`} blurred={blurred}/></>, c:"#22c55e", isDollar:false},
           {l:"ANN. RETURN",    v:fmtPct(latest["Ann Return"]),  s:"Since inception", c:"#3b82f6", isDollar:false},
@@ -197,7 +214,7 @@ export default function App() {
       </div>
 
       {/* ── TABS ── */}
-      <div style={{display:"flex",marginBottom:20,borderBottom:"1px solid #1e293b"}}>
+      <div className="tab-bar">
         {TABS.map(t=><button key={t} className="tb" onClick={()=>setTab(t)} style={{color:tab===t?"#f0b429":"#475569",borderBottom:tab===t?"2px solid #f0b429":"2px solid transparent",fontWeight:tab===t?700:400}}>{t}</button>)}
       </div>
 
@@ -228,7 +245,7 @@ export default function App() {
             </BarChart>
           </ResponsiveContainer>
         </div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+        <div className="best-worst-grid">
           {[{l:"🏆 BEST MONTHS",d:best3,c:"#22c55e"},{l:"📉 WORST MONTHS",d:worst3,c:"#ef4444"}].map(({l,d,c})=>(
             <div key={l} className="card">
               <div style={{fontSize:10,color:"#475569",letterSpacing:".12em",marginBottom:14}}>{l}</div>
@@ -436,7 +453,7 @@ export default function App() {
         </div>
 
         {/* Household Totals */}
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+        <div className="insurance-summary-grid">
           <div className="card">
             <div style={{fontSize:10,color:"#475569",letterSpacing:".12em",marginBottom:16}}>HOUSEHOLD COVERAGE TOTALS</div>
             {[
