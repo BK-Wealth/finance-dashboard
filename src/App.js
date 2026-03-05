@@ -13,6 +13,18 @@ const PALETTE = { EE:"#3b82f6",Stake:"#f59e0b",SPV:"#10b981",EVP:"#a78bfa",Crypt
 const fmt = (n,d=0) => (n==null||isNaN(n)) ? "—" : Number(n).toLocaleString("en-AU",{minimumFractionDigits:d,maximumFractionDigits:d});
 const fmtPct = n => (n==null||isNaN(n)) ? "—" : `${(n*100).toFixed(1)}%`;
 const TICK = { fill:"#64748b",fontSize:11,fontFamily:"IBM Plex Mono,monospace" };
+const TICK_SM = { fill:"#64748b",fontSize:10,fontFamily:"IBM Plex Mono,monospace" };
+
+// Show only year labels and deduplicate so each year appears once
+const yearTick = (dateStr) => dateStr ? dateStr.slice(0,4) : "";
+const makeYearTicks = (data) => {
+  const seen = new Set();
+  return data.reduce((acc, d, i) => {
+    const yr = d.date ? d.date.slice(0,4) : "";
+    if (!seen.has(yr)) { seen.add(yr); acc.push(i); }
+    return acc;
+  }, []);
+};
 
 // Blurred dollar amount wrapper
 function Amt({ v, blurred, style={} }) {
@@ -135,7 +147,7 @@ export default function App() {
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;700&family=Syne:wght@700;800&display=swap');
         *{box-sizing:border-box;margin:0;padding:0}
-        .card{background:#0d1929;border:1px solid #1e293b;border-radius:12px;padding:20px 24px}
+        .card{background:#0d1929;border:1px solid #1e293b;border-radius:12px;padding:20px 24px;overflow:hidden}
         .inp{background:#070d1a;border:1px solid #1e293b;border-radius:6px;color:#e2e8f0;font-family:'IBM Plex Mono',monospace;font-size:13px;padding:8px 10px;width:100%;outline:none;transition:border .15s}
         .inp:focus{border-color:#f0b429} .inp:disabled{opacity:.4}
         .btn-p{background:#f0b429;color:#070d1a;border:none;border-radius:6px;padding:9px 18px;font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:700;cursor:pointer;letter-spacing:.05em}
@@ -226,7 +238,7 @@ export default function App() {
             <AreaChart data={valueData} margin={{top:4,right:4,left:8,bottom:0}}>
               <defs><linearGradient id="g1" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#f0b429" stopOpacity={.25}/><stop offset="95%" stopColor="#f0b429" stopOpacity={0}/></linearGradient></defs>
               <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false}/>
-              <XAxis dataKey="date" tick={TICK} tickLine={false} axisLine={false} interval={Math.floor(valueData.length/8)}/>
+              <XAxis dataKey="date" tick={TICK_SM} tickLine={false} axisLine={false} ticks={makeYearTicks(valueData).map(i=>valueData[i]?.date)} tickFormatter={yearTick}/>
               <YAxis tick={TICK} tickLine={false} axisLine={false} tickFormatter={yFmtDollar} width={55}/>
               <Tooltip content={<TT isDollar={true} blurred={blurred}/>}/>
               <Area type="monotone" dataKey="Total" stroke="#f0b429" strokeWidth={2} fill="url(#g1)" name="Portfolio" dot={false} activeDot={{r:4,fill:"#f0b429"}}/>
@@ -238,7 +250,7 @@ export default function App() {
           <ResponsiveContainer width="100%" height={170}>
             <BarChart data={retData} margin={{top:4,right:4,left:8,bottom:0}}>
               <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false}/>
-              <XAxis dataKey="date" tick={TICK} tickLine={false} axisLine={false} interval={Math.floor(retData.length/8)}/>
+              <XAxis dataKey="date" tick={TICK_SM} tickLine={false} axisLine={false} ticks={makeYearTicks(retData).map(i=>retData[i]?.date)} tickFormatter={yearTick}/>
               <YAxis tick={TICK} tickLine={false} axisLine={false} tickFormatter={yFmtPct} width={45}/>
               <Tooltip content={<TT isDollar={false} blurred={blurred}/>}/>
               <Bar dataKey="monthly" name="Monthly Return" radius={[2,2,0,0]}>{retData.map((d,i)=><Cell key={i} fill={d.monthly>=0?"#22c55e":"#ef4444"} fillOpacity={.85}/>)}</Bar>
@@ -267,7 +279,7 @@ export default function App() {
           <ResponsiveContainer width="100%" height={300}>
             <AreaChart data={bdData} margin={{top:4,right:4,left:8,bottom:0}}>
               <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false}/>
-              <XAxis dataKey="date" tick={TICK} tickLine={false} axisLine={false} interval={Math.floor(bdData.length/7)}/>
+              <XAxis dataKey="date" tick={TICK_SM} tickLine={false} axisLine={false} ticks={makeYearTicks(bdData).map(i=>bdData[i]?.date)} tickFormatter={yearTick}/>
               <YAxis tick={TICK} tickLine={false} axisLine={false} tickFormatter={yFmtDollar} width={55}/>
               <Tooltip content={<TT isDollar={true} blurred={blurred}/>}/>
               {ASSETS.map(a=><Area key={a} type="monotone" dataKey={a} stackId="1" stroke={PALETTE[a]} fill={PALETTE[a]} fillOpacity={.75} strokeWidth={0} name={a} dot={false}/>)}
@@ -279,7 +291,7 @@ export default function App() {
           <ResponsiveContainer width="100%" height={260}>
             <LineChart data={bdData} margin={{top:4,right:4,left:8,bottom:0}}>
               <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false}/>
-              <XAxis dataKey="date" tick={TICK} tickLine={false} axisLine={false} interval={Math.floor(bdData.length/7)}/>
+              <XAxis dataKey="date" tick={TICK_SM} tickLine={false} axisLine={false} ticks={makeYearTicks(bdData).map(i=>bdData[i]?.date)} tickFormatter={yearTick}/>
               <YAxis tick={TICK} tickLine={false} axisLine={false} tickFormatter={yFmtDollar} width={55}/>
               <Tooltip content={<TT isDollar={true} blurred={blurred}/>}/>
               <Legend wrapperStyle={{fontSize:11,fontFamily:"IBM Plex Mono"}}/>
@@ -297,7 +309,7 @@ export default function App() {
             <AreaChart data={retData} margin={{top:4,right:4,left:8,bottom:0}}>
               <defs><linearGradient id="g2" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#3b82f6" stopOpacity={.3}/><stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/></linearGradient></defs>
               <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false}/>
-              <XAxis dataKey="date" tick={TICK} tickLine={false} axisLine={false} interval={Math.floor(retData.length/8)}/>
+              <XAxis dataKey="date" tick={TICK_SM} tickLine={false} axisLine={false} ticks={makeYearTicks(retData).map(i=>retData[i]?.date)} tickFormatter={yearTick}/>
               <YAxis tick={TICK} tickLine={false} axisLine={false} tickFormatter={yFmtPct} width={52}/>
               <Tooltip content={<TT isDollar={false} blurred={blurred}/>}/>
               <Area type="monotone" dataKey="cumm" stroke="#3b82f6" strokeWidth={2} fill="url(#g2)" name="Cumm. Return" dot={false} activeDot={{r:4}}/>
@@ -309,7 +321,7 @@ export default function App() {
           <ResponsiveContainer width="100%" height={200}>
             <LineChart data={retData} margin={{top:4,right:4,left:8,bottom:0}}>
               <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false}/>
-              <XAxis dataKey="date" tick={TICK} tickLine={false} axisLine={false} interval={Math.floor(retData.length/8)}/>
+              <XAxis dataKey="date" tick={TICK_SM} tickLine={false} axisLine={false} ticks={makeYearTicks(retData).map(i=>retData[i]?.date)} tickFormatter={yearTick}/>
               <YAxis tick={TICK} tickLine={false} axisLine={false} tickFormatter={yFmtPct} width={52}/>
               <Tooltip content={<TT isDollar={false} blurred={blurred}/>}/>
               <Line type="monotone" dataKey="ann" stroke="#a78bfa" strokeWidth={2} name="Ann. Return" dot={false} activeDot={{r:4}}/>
@@ -374,8 +386,8 @@ export default function App() {
               <div style={{fontFamily:"Syne,sans-serif",fontSize:22,fontWeight:800,color:"#f0b429"}}><Amt v="$4,893.60" blurred={blurred}/></div>
             </div>
           </div>
-          <div style={{overflowX:"auto"}}>
-            <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+          <div style={{overflowX:"auto",WebkitOverflowScrolling:"touch",marginLeft:-4,marginRight:-4,paddingLeft:4,paddingRight:4}}>
+            <table style={{borderCollapse:"collapse",fontSize:12,minWidth:620}}>
               <thead><tr style={{color:"#475569",fontSize:10,letterSpacing:".08em"}}>
                 {["COVER TYPE","COVER AMOUNT","PAYOUT TYPE","ANNUAL PREMIUM","TYPE","WAITING","ENDS"].map(h=>(
                   <th key={h} style={{textAlign:"left",padding:"6px 8px",borderBottom:"1px solid #1e293b",whiteSpace:"nowrap"}}>{h}</th>
@@ -422,8 +434,8 @@ export default function App() {
               <div style={{fontFamily:"Syne,sans-serif",fontSize:22,fontWeight:800,color:"#f0b429"}}><Amt v="$2,426.22" blurred={blurred}/></div>
             </div>
           </div>
-          <div style={{overflowX:"auto"}}>
-            <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+          <div style={{overflowX:"auto",WebkitOverflowScrolling:"touch",marginLeft:-4,marginRight:-4,paddingLeft:4,paddingRight:4}}>
+            <table style={{borderCollapse:"collapse",fontSize:12,minWidth:620}}>
               <thead><tr style={{color:"#475569",fontSize:10,letterSpacing:".08em"}}>
                 {["COVER TYPE","COVER AMOUNT","PAYOUT TYPE","ANNUAL PREMIUM","TYPE","WAITING","ENDS"].map(h=>(
                   <th key={h} style={{textAlign:"left",padding:"6px 8px",borderBottom:"1px solid #1e293b",whiteSpace:"nowrap"}}>{h}</th>
