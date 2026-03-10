@@ -72,6 +72,19 @@ function InfoTip({ text }) {
   );
 }
 
+// Mini sparkline — no axes, just the line
+function Sparkline({ data, color="#f0b429", height=44 }) {
+  if (!data || data.length < 2) return null;
+  return (
+    <ResponsiveContainer width="100%" height={height}>
+      <LineChart data={data} margin={{top:4,right:0,left:0,bottom:4}}>
+        <Line type="monotone" dataKey="v" stroke={color} strokeWidth={1.5}
+          dot={false} isAnimationActive={false}/>
+      </LineChart>
+    </ResponsiveContainer>
+  );
+}
+
 function recalcReturns(data) {
   if (!data || data.length === 0) return [];
   const base = data[0].Total;
@@ -146,6 +159,29 @@ export default function App() {
   const drawdown = peak > 0 ? (latest.Total - peak) / peak : 0;
 
   const valueData = data.map(d => ({date:d.Date, Total:Math.round(d.Total)}));
+  // Sparkline data arrays for KPI cards
+  const spkTotal  = data.slice(1).map(d => ({v: d["Cumm Return"]}));
+  const spkAnn    = data.slice(1).map(d => ({v: d["Ann Return"]}));
+  const spkValue  = data.map(d => ({v: d.Total}));
+  const spkDrawdn = data.map(d => {
+    const pk = Math.max(...data.slice(0, data.indexOf(d)+1).map(x=>x.Total));
+    return {v: pk > 0 ? (d.Total - pk) / pk : 0};
+  });
+  // Narrative headline
+  const prevTotal   = data.length > 1 ? data[data.length-2].Total : latest.Total;
+  const monthDelta  = latest.Total - prevTotal;
+  const monthUp     = monthDelta >= 0;
+  const narrativeGoalYr = (() => {
+    const gt = parseFloat(String(goalAmount).replace(/,/g,"")) || 1000000;
+    if (latest.Total >= gt) return null;
+    const r = latest["Ann Return"] / 12;
+    if (r <= 0) return null;
+    let pv = latest.Total, m = 0;
+    while (pv < gt && m < 600) { pv = pv*(1+r); m++; }
+    if (m >= 600) return null;
+    const d = new Date(); d.setMonth(d.getMonth()+m);
+    return d.getFullYear();
+  })();
   const retData = data.slice(1).map(d => ({date:d.Date, monthly:d["Monthly return"], cumm:d["Cumm Return"], ann:d["Ann Return"]}));
   const bdData = data.filter(d => d.EE != null).map(d => { const o={date:d.Date}; ASSETS.forEach(a=>{o[a]=Math.max(0,d[a]||0)}); return o; });
   const pie = ASSETS.map(a => ({name:a,value:Math.max(0,latest[a]||0)})).filter(d=>d.value>0).sort((a,b)=>b.value-a.value);
@@ -258,90 +294,143 @@ export default function App() {
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;700&family=Inter:wght@400;500;600&family=Syne:wght@700;800&display=swap');
         *{box-sizing:border-box;margin:0;padding:0}
+        /* ── Animations ── */
+        @keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+        @keyframes shimmer{0%,100%{opacity:1}50%{opacity:.65}}
+        @keyframes glowPulse{0%,100%{opacity:.5}50%{opacity:1}}
+        @keyframes tickIn{from{transform:translateY(-8px);opacity:0}to{transform:none;opacity:1}}
         /* ── Type scale ── */
-        .t-label{font-size:10px;font-family:'IBM Plex Mono',monospace;letter-spacing:.12em;color:#475569;text-transform:uppercase}
+        .t-label{font-size:10px;font-family:'IBM Plex Mono',monospace;letter-spacing:.14em;color:#475569;text-transform:uppercase}
         .t-value{font-size:20px;font-family:'Syne',sans-serif;font-weight:800;line-height:1.1}
         .t-body{font-size:13px;font-family:'Inter',sans-serif;color:#94a3b8;line-height:1.5}
         .t-mono{font-family:'IBM Plex Mono',monospace}
         .t-caption{font-size:11px;font-family:'Inter',sans-serif;color:#475569}
         .t-heading{font-family:'Syne',sans-serif;font-weight:800;letter-spacing:-.02em}
-        .card{background:#0d1929;border:1px solid #1e293b;border-radius:12px;padding:20px 24px;overflow:hidden}
+        /* ── Cards — hierarchy system ── */
+        .card{background:#0d1929;border:1px solid #1a2640;border-radius:14px;padding:20px 24px;overflow:hidden;animation:fadeUp .35s ease both}
+        .card-hero{background:linear-gradient(145deg,#0d1929 0%,#0a1520 100%);border:1px solid #1e3050;border-radius:16px;padding:32px 36px;overflow:hidden;position:relative}
+        .card-primary{background:#0d1929;border:1px solid #1e3050;border-radius:14px;padding:20px 24px;overflow:hidden;box-shadow:0 0 0 1px #1e305040}
+        /* ── Inputs ── */
         .inp{background:#070d1a;border:1px solid #1e293b;border-radius:6px;color:#e2e8f0;font-family:'IBM Plex Mono',monospace;font-size:13px;padding:8px 10px;width:100%;outline:none;transition:border .15s}
         .inp:focus{border-color:#f0b429} .inp:disabled{opacity:.4}
-        .btn-p{background:#f0b429;color:#070d1a;border:none;border-radius:6px;padding:9px 18px;font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:700;cursor:pointer;letter-spacing:.05em}
-        .btn-p:hover{opacity:.85}
-        .btn-s{background:transparent;color:#94a3b8;border:1px solid #1e293b;border-radius:6px;padding:9px 18px;font-family:'IBM Plex Mono',monospace;font-size:12px;cursor:pointer}
+        /* ── Buttons ── */
+        .btn-p{background:#f0b429;color:#070d1a;border:none;border-radius:8px;padding:9px 18px;font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:700;cursor:pointer;letter-spacing:.05em;transition:all .15s}
+        .btn-p:hover{background:#f8c84a;transform:translateY(-1px)}
+        .btn-s{background:transparent;color:#94a3b8;border:1px solid #1e293b;border-radius:8px;padding:9px 18px;font-family:'IBM Plex Mono',monospace;font-size:12px;cursor:pointer;transition:all .15s}
         .btn-s:hover{border-color:#475569;color:#e2e8f0}
-        .btn-d{background:transparent;color:#ef4444;border:1px solid #ef444430;border-radius:6px;padding:9px 18px;font-family:'IBM Plex Mono',monospace;font-size:12px;cursor:pointer}
+        .btn-d{background:transparent;color:#ef4444;border:1px solid #ef444430;border-radius:8px;padding:9px 18px;font-family:'IBM Plex Mono',monospace;font-size:12px;cursor:pointer}
         .btn-d:hover{background:#ef444415}
-        .eye-btn{background:transparent;border:1px solid #1e293b;border-radius:6px;padding:7px 10px;cursor:pointer;color:#475569;display:flex;align-items:center;transition:all .15s}
+        .eye-btn{background:transparent;border:1px solid #1e293b;border-radius:8px;padding:7px 10px;cursor:pointer;color:#475569;display:flex;align-items:center;transition:all .15s}
         .eye-btn:hover{border-color:#475569;color:#94a3b8}
         .eye-btn.active{border-color:#f0b42960;color:#f0b429}
+        /* ── Modal ── */
         .ovl{position:fixed;inset:0;background:#00000095;backdrop-filter:blur(6px);z-index:100;display:flex;align-items:center;justify-content:center;padding:16px}
         .mdl{background:#0d1929;border:1px solid #253348;border-radius:16px;padding:28px;width:540px;max-height:88vh;overflow-y:auto;max-width:100%}
-        .tb{background:none;border:none;cursor:pointer;font-family:inherit;transition:all .15s;padding:8px 16px;font-size:11px;letter-spacing:.1em;text-transform:uppercase}
-        .tb:hover{color:#f0b429}
-        .kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px}
+        /* ── Pill Tab Bar ── */
+        .tab-bar{display:flex;margin-bottom:24px;background:#0a1118;border-radius:12px;padding:4px;gap:2px;overflow-x:auto;-webkit-overflow-scrolling:touch;width:fit-content}
+        .tab-bar::-webkit-scrollbar{display:none}
+        .tb{background:none;border:none;cursor:pointer;font-family:'IBM Plex Mono',monospace;transition:all .2s;padding:8px 18px;font-size:10px;letter-spacing:.1em;text-transform:uppercase;border-radius:9px;color:#475569;font-weight:500;white-space:nowrap}
+        .tb:hover{color:#94a3b8}
+        .tb.active{background:#f0b429;color:#070d1a;font-weight:700;box-shadow:0 2px 12px #f0b42940}
+        /* ── Grids ── */
+        .kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:28px}
         .best-worst-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
         .insurance-summary-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-        .tab-bar{display:flex;margin-bottom:20px;border-bottom:1px solid #1e293b;overflow-x:auto;-webkit-overflow-scrolling:touch}
-        .tab-bar::-webkit-scrollbar{display:none}
-        .header-row{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:28px;flex-wrap:wrap;gap:16px}
-        .header-right{display:flex;flex-direction:column;align-items:flex-end;gap:8px}
-        #main-wrap{padding:16px 12px!important} @media(max-width:640px){
+        /* ── Layout ── */
+        .header-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:16px}
+        .header-right{display:flex;gap:8px;align-items:center}
+        /* ── Sparkline container ── */
+        .spark-wrap{margin-top:12px;height:44px;opacity:.7}
+        /* ── Narrative bar ── */
+        .narrative{font-family:'Inter',sans-serif;font-size:13px;color:#64748b;margin-bottom:20px;padding:12px 16px;background:#0a1118;border-radius:10px;border-left:3px solid #1e293b;line-height:1.6}
+        /* ── Chart card label ── */
+        .chart-label{font-size:10px;font-family:'IBM Plex Mono',monospace;letter-spacing:.14em;color:#475569;text-transform:uppercase;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between}
+        /* ── Responsive ── */
+        #main-wrap{padding:28px 28px} @media(max-width:640px){
+          #main-wrap{padding:16px 12px!important}
           .kpi-grid{grid-template-columns:repeat(2,1fr)!important}
           .best-worst-grid{grid-template-columns:1fr!important}
           .insurance-summary-grid{grid-template-columns:1fr!important}
-          .header-row{flex-direction:column}
+          .header-row{flex-direction:column;align-items:flex-start}
           .header-right{align-items:flex-start}
           body{font-size:13px}
-          .card{padding:16px}
+          .card,.card-hero,.card-primary{padding:16px}
           .mdl{padding:20px}
+          .tab-bar{width:100%}
         }
       `}</style>
 
       {/* ── HEADER ── */}
       <div className="header-row">
-        <div style={{display:"flex",alignItems:"flex-start",gap:16}}>
-          {/* Avatar */}
-          <div style={{position:"relative",width:58,height:38,flexShrink:0,marginTop:2}}>
-            <div style={{position:"absolute",left:0,top:0,width:38,height:38,borderRadius:"50%",background:"linear-gradient(135deg,#3b82f6,#1d4ed8)",border:"2px solid #070d1a",zIndex:2,display:"flex",alignItems:"center",justifyContent:"center"}}>
-              <span style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:14,color:"#fff",lineHeight:1}}>B</span>
+        <div style={{display:"flex",alignItems:"center",gap:14}}>
+          {/* Avatars */}
+          <div style={{position:"relative",width:58,height:40,flexShrink:0}}>
+            <div style={{position:"absolute",left:0,top:0,width:40,height:40,borderRadius:"50%",background:"linear-gradient(135deg,#3b82f6,#1d4ed8)",border:"2.5px solid #070d1a",zIndex:2,display:"flex",alignItems:"center",justifyContent:"center"}}>
+              <span style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:15,color:"#fff",lineHeight:1}}>B</span>
             </div>
-            <div style={{position:"absolute",left:20,top:0,width:38,height:38,borderRadius:"50%",background:"linear-gradient(135deg,#ec4899,#be185d)",border:"2px solid #070d1a",zIndex:1,display:"flex",alignItems:"center",justifyContent:"center"}}>
-              <span style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:14,color:"#fff",lineHeight:1}}>M</span>
+            <div style={{position:"absolute",left:22,top:0,width:40,height:40,borderRadius:"50%",background:"linear-gradient(135deg,#ec4899,#be185d)",border:"2.5px solid #070d1a",zIndex:1,display:"flex",alignItems:"center",justifyContent:"center"}}>
+              <span style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:15,color:"#fff",lineHeight:1}}>M</span>
             </div>
           </div>
           <div>
-            <div className="t-label" style={{marginBottom:3}}>Bradley & Martine · Personal Finance</div>
-            <h1 className="t-heading" style={{fontSize:24,color:"#f8fafc"}}>Portfolio Dashboard</h1>
-            <div className="t-caption" style={{marginTop:4,display:"flex",alignItems:"center",gap:8}}>
-              <span>{earliest.Date} → {latest.Date}</span>
-              <span style={{color:"#1e293b"}}>·</span>
-              <span>{data.length} months of data</span>
-              <span style={{color:"#1e293b"}}>·</span>
-              <span style={{color:"#f0b42980"}}>Updated {latest.Date}</span>
-              {custom.length>0&&<><span style={{color:"#1e293b"}}>·</span><span style={{color:"#f0b42999"}}>{custom.length} custom</span></>}
-            </div>
+            <div style={{fontSize:11,fontFamily:"'IBM Plex Mono',monospace",letterSpacing:".14em",color:"#475569",textTransform:"uppercase",marginBottom:2}}>Bradley &amp; Martine</div>
+            <div className="t-heading" style={{fontSize:18,color:"#f8fafc",lineHeight:1.1}}>Portfolio Dashboard</div>
           </div>
         </div>
         <div className="header-right">
-          <div style={{display:"flex",gap:8,alignItems:"center"}}>
-            <button className={`eye-btn${blurred?" active":""}`} onClick={()=>setBlurred(b=>!b)} title={blurred?"Show values":"Hide values"}>
-              <EyeIcon open={!blurred}/>
-            </button>
-            <button className="btn-p" onClick={openAdd} style={{display:"flex",alignItems:"center",gap:6}}><span style={{fontSize:16,lineHeight:1}}>+</span> Add Month</button>
-          </div>
-          <div style={{textAlign:"right"}}>
-            <div className="t-label" style={{marginBottom:4}}>Household Net Worth</div>
-            <div className="t-heading" style={{fontSize:30,color:"#f0b429"}}>
+          <button className={`eye-btn${blurred?" active":""}`} onClick={()=>setBlurred(b=>!b)} title={blurred?"Show values":"Hide values"}>
+            <EyeIcon open={!blurred}/>
+          </button>
+          <button className="btn-p" onClick={openAdd} style={{display:"flex",alignItems:"center",gap:6}}>
+            <span style={{fontSize:16,lineHeight:1}}>+</span> Add Month
+          </button>
+        </div>
+      </div>
+
+      {/* ── HERO NET WORTH ── */}
+      <div className="card-hero" style={{marginBottom:24}}>
+        {/* Ambient glow blob */}
+        <div style={{position:"absolute",top:-60,right:-40,width:320,height:320,borderRadius:"50%",
+          background: monthUp ? "radial-gradient(circle,#22c55e18 0%,transparent 70%)" : "radial-gradient(circle,#ef444418 0%,transparent 70%)",
+          pointerEvents:"none",animation:"glowPulse 4s ease-in-out infinite"}}/>
+        <div style={{position:"relative",display:"flex",justifyContent:"space-between",alignItems:"flex-end",flexWrap:"wrap",gap:20}}>
+          <div>
+            <div style={{fontSize:10,fontFamily:"'IBM Plex Mono',monospace",letterSpacing:".18em",color:"#475569",textTransform:"uppercase",marginBottom:8}}>Household Net Worth</div>
+            <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:"clamp(48px,6vw,72px)",lineHeight:1,
+              color:"#f0b429",letterSpacing:"-.03em",
+              textShadow: monthUp ? "0 0 40px #22c55e30,0 0 80px #f0b42920" : "0 0 40px #ef444430,0 0 80px #f0b42920"}}>
               <Amt v={`$${fmt(latest.Total)}`} blurred={blurred}/>
             </div>
-            <div style={{fontSize:12,fontFamily:"Inter,sans-serif",color:latest["Monthly return"]>=0?"#22c55e":"#ef4444",marginTop:3,display:"flex",alignItems:"center",gap:4,justifyContent:"flex-end"}}>
-              <span style={{fontSize:14}}>{latest["Monthly return"]>=0?"▲":"▼"}</span>
-              <span style={{fontWeight:600}}>{fmtPct(Math.abs(latest["Monthly return"]))}</span>
-              <span style={{color:"#475569"}}>vs last month</span>
+            <div style={{marginTop:10,display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+              <span style={{display:"inline-flex",alignItems:"center",gap:5,
+                background: monthUp?"#22c55e15":"#ef444415",
+                border:`1px solid ${monthUp?"#22c55e30":"#ef444430"}`,
+                borderRadius:20,padding:"4px 12px",fontSize:12,fontFamily:"'Inter',sans-serif",
+                color: monthUp?"#22c55e":"#ef4444",fontWeight:600}}>
+                <span style={{fontSize:13}}>{monthUp?"▲":"▼"}</span>
+                {fmtPct(Math.abs(latest["Monthly return"]))} this month
+                {!blurred && <span style={{color:"#ffffff40",marginLeft:4}}>
+                  ({monthUp?"+":"-"}${fmt(Math.abs(monthDelta))})
+                </span>}
+              </span>
+              <span style={{fontSize:11,fontFamily:"'IBM Plex Mono',monospace",color:"#334155"}}>
+                {earliest.Date} → {latest.Date} · {data.length} months
+              </span>
             </div>
+          </div>
+          {/* Quick stats column */}
+          <div style={{display:"flex",gap:24,flexWrap:"wrap"}}>
+            {[
+              {l:"Total Return", v:fmtPct(latest["Cumm Return"]), c:"#22c55e"},
+              {l:"Ann. CAGR",    v:fmtPct(latest["Ann Return"]),  c:"#3b82f6"},
+              {l:"All-Time Peak",v:<Amt v={`$${fmt(peak)}`} blurred={blurred}/>, c:"#f0b429"},
+              {l:"Drawdown",     v:fmtPct(drawdown), c:drawdown<-.05?"#ef4444":"#475569"},
+            ].map((s,i)=>(
+              <div key={i} style={{textAlign:"right"}}>
+                <div style={{fontSize:10,fontFamily:"'IBM Plex Mono',monospace",letterSpacing:".12em",color:"#334155",textTransform:"uppercase",marginBottom:3}}>{s.l}</div>
+                <div style={{fontSize:18,fontFamily:"'Syne',sans-serif",fontWeight:800,color:s.c}}>{s.v}</div>
+              </div>
+            ))}
           </div>
         </div>
       </div>
@@ -349,68 +438,104 @@ export default function App() {
       {/* ── KPI CARDS ── */}
       <div className="kpi-grid">
         <div className="card">
-          <div className="t-label" style={{marginBottom:8,display:"flex",alignItems:"center"}}>
-            Total Return
-            <InfoTip text="Total gain from your starting value of $89,412 in Mar 2019. Calculated as (current value ÷ starting value) − 1."/>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
+            <div className="t-label">Total Return<InfoTip text="Total gain from your starting value of $89,412 in Mar 2019. Calculated as (current value ÷ starting value) − 1."/></div>
           </div>
-          <div className="t-value" style={{color:"#22c55e"}}>{fmtPct(latest["Cumm Return"])}</div>
-          <div className="t-caption" style={{marginTop:5}}>From <Amt v={`$${fmt(earliest.Total)}`} blurred={blurred}/></div>
+          <div className="t-value" style={{color:"#22c55e",fontSize:24}}>{fmtPct(latest["Cumm Return"])}</div>
+          <div className="t-caption" style={{marginTop:4}}>From <Amt v={`$${fmt(earliest.Total)}`} blurred={blurred}/></div>
+          <div className="spark-wrap"><Sparkline data={spkTotal} color="#22c55e"/></div>
         </div>
         <div className="card">
-          <div className="t-label" style={{marginBottom:8,display:"flex",alignItems:"center"}}>
-            Ann. Return
-            <InfoTip text="Compound Annual Growth Rate (CAGR) since inception. Formula: (1 + total return)^(12 ÷ months elapsed) − 1. Assumes returns compound monthly."/>
-          </div>
-          <div className="t-value" style={{color:"#3b82f6"}}>{fmtPct(latest["Ann Return"])}</div>
-          <div className="t-caption" style={{marginTop:5}}>Since {earliest.Date}</div>
+          <div className="t-label" style={{marginBottom:6}}>Ann. CAGR<InfoTip text="Compound Annual Growth Rate (CAGR) since inception. Formula: (1 + total return)^(12 ÷ months elapsed) − 1."/></div>
+          <div className="t-value" style={{color:"#3b82f6",fontSize:24}}>{fmtPct(latest["Ann Return"])}</div>
+          <div className="t-caption" style={{marginTop:4}}>Since {earliest.Date}</div>
+          <div className="spark-wrap"><Sparkline data={spkAnn} color="#3b82f6"/></div>
         </div>
         <div className="card">
-          <div className="t-label" style={{marginBottom:8,display:"flex",alignItems:"center"}}>
-            All-Time Peak
-            <InfoTip text="The highest end-of-month portfolio value recorded. Current drawdown measures how far below this peak you currently sit."/>
-          </div>
-          <div className="t-value" style={{color:"#f0b429"}}><Amt v={`$${fmt(peak)}`} blurred={blurred}/></div>
-          <div className="t-caption" style={{marginTop:5}}>Highest recorded value</div>
+          <div className="t-label" style={{marginBottom:6}}>All-Time Peak<InfoTip text="The highest end-of-month portfolio value recorded. Drawdown shows how far below this peak you currently sit."/></div>
+          <div className="t-value" style={{color:"#f0b429",fontSize:24}}><Amt v={`$${fmt(peak)}`} blurred={blurred}/></div>
+          <div className="t-caption" style={{marginTop:4}}>Jan 2026</div>
+          <div className="spark-wrap"><Sparkline data={spkValue} color="#f0b429"/></div>
         </div>
         <div className="card">
-          <div className="t-label" style={{marginBottom:8,display:"flex",alignItems:"center"}}>
-            Drawdown
-            <InfoTip text="How far current value sits below the all-time peak. Calculated as (current − peak) ÷ peak. A reading of 0% means you are at a new high."/>
-          </div>
-          <div className="t-value" style={{color:drawdown<-0.05?"#ef4444":"#94a3b8"}}>{fmtPct(drawdown)}</div>
-          <div className="t-caption" style={{marginTop:5}}>From peak of <Amt v={`$${fmt(peak)}`} blurred={blurred}/></div>
+          <div className="t-label" style={{marginBottom:6}}>Drawdown<InfoTip text="How far current value sits below the all-time peak. Calculated as (current − peak) ÷ peak. 0% means you are at a new high."/></div>
+          <div className="t-value" style={{color:drawdown<-0.05?"#ef4444":"#22c55e",fontSize:24}}>{fmtPct(drawdown)}</div>
+          <div className="t-caption" style={{marginTop:4}}>From peak of <Amt v={`$${fmt(peak)}`} blurred={blurred}/></div>
+          <div className="spark-wrap"><Sparkline data={spkDrawdn} color={drawdown<-0.05?"#ef4444":"#22c55e"}/></div>
         </div>
       </div>
 
       {/* ── TABS ── */}
-      <div className="tab-bar">
-        {TABS.map(t=><button key={t} className="tb" onClick={()=>setTab(t)} style={{color:tab===t?"#f0b429":"#475569",borderBottom:tab===t?"2px solid #f0b429":"2px solid transparent",fontWeight:tab===t?700:400}}>{t}</button>)}
+      <div style={{marginBottom:24}}>
+        <div className="tab-bar">
+          {TABS.map(t=>(
+            <button key={t} className={`tb${tab===t?" active":""}`} onClick={()=>setTab(t)}>{t}</button>
+          ))}
+        </div>
       </div>
 
       {/* ── OVERVIEW ── */}
       {tab==="overview"&&<div style={{display:"grid",gap:20}}>
-        <div className="card">
-          <div className="t-label" style={{marginBottom:16}}>PORTFOLIO VALUE</div>
-          <ResponsiveContainer width="100%" height={250}>
-            <AreaChart data={valueData} margin={{top:4,right:4,left:8,bottom:0}}>
-              <defs><linearGradient id="g1" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#f0b429" stopOpacity={.25}/><stop offset="95%" stopColor="#f0b429" stopOpacity={0}/></linearGradient></defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false}/>
-              <XAxis dataKey="date" tick={TICK_SM} tickLine={false} axisLine={false} ticks={makeYearTicks(valueData).map(i=>valueData[i]?.date)} tickFormatter={yearTick}/>
+
+        {/* Narrative headline */}
+        <div className="narrative">
+          Portfolio is{" "}
+          <span style={{color:monthUp?"#22c55e":"#ef4444",fontWeight:600}}>
+            {monthUp?"up":"down"} ${fmt(Math.abs(monthDelta))}
+          </span>{" "}
+          this month, running at{" "}
+          <span style={{color:"#f0b429",fontWeight:600}}>{fmtPct(latest["Ann Return"])} p.a.</span>{" "}
+          since inception
+          {narrativeGoalYr && <>
+            {" "}· at this rate, $1M reached by{" "}
+            <span style={{color:"#a78bfa",fontWeight:600}}>{narrativeGoalYr}</span>
+          </>}
+          {drawdown < -0.02 && <>
+            {" "}·{" "}
+            <span style={{color:"#ef4444"}}>{fmtPct(Math.abs(drawdown))} below all-time peak</span>
+          </>}
+        </div>
+
+        <div className="card-primary">
+          <div className="chart-label">
+            <span>Portfolio Value</span>
+            <span style={{color:"#334155",fontSize:11}}>{earliest.Date} → {latest.Date}</span>
+          </div>
+          <ResponsiveContainer width="100%" height={280}>
+            <AreaChart data={valueData} margin={{top:8,right:8,left:8,bottom:0}}>
+              <defs>
+                <linearGradient id="g1" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%"  stopColor="#f0b429" stopOpacity={.2}/>
+                  <stop offset="60%" stopColor="#f0b429" stopOpacity={.04}/>
+                  <stop offset="100%" stopColor="#f0b429" stopOpacity={0}/>
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="2 4" stroke="#0f1e33" vertical={false}/>
+              <XAxis dataKey="date" tick={TICK_SM} tickLine={false} axisLine={false}
+                ticks={makeYearTicks(valueData).map(i=>valueData[i]?.date)} tickFormatter={yearTick}/>
               <YAxis tick={TICK} tickLine={false} axisLine={false} tickFormatter={yFmtDollar} width={55}/>
               <Tooltip content={<TT isDollar={true} blurred={blurred}/>}/>
-              <Area type="monotone" dataKey="Total" stroke="#f0b429" strokeWidth={2} fill="url(#g1)" name="Portfolio" dot={false} activeDot={{r:4,fill:"#f0b429"}}/>
+              <Area type="monotone" dataKey="Total" stroke="#f0b429" strokeWidth={2.5}
+                fill="url(#g1)" name="Portfolio" dot={false}
+                activeDot={{r:5,fill:"#f0b429",stroke:"#070d1a",strokeWidth:2}}/>
             </AreaChart>
           </ResponsiveContainer>
         </div>
         <div className="card">
-          <div className="t-label" style={{marginBottom:16}}>MONTHLY RETURNS</div>
-          <ResponsiveContainer width="100%" height={170}>
-            <BarChart data={retData} margin={{top:4,right:4,left:8,bottom:0}}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false}/>
-              <XAxis dataKey="date" tick={TICK_SM} tickLine={false} axisLine={false} ticks={makeYearTicks(retData).map(i=>retData[i]?.date)} tickFormatter={yearTick}/>
+          <div className="chart-label"><span>Monthly Returns</span></div>
+          <ResponsiveContainer width="100%" height={160}>
+            <BarChart data={retData} margin={{top:4,right:8,left:8,bottom:0}} barCategoryGap="20%">
+              <CartesianGrid strokeDasharray="2 4" stroke="#0f1e33" vertical={false}/>
+              <XAxis dataKey="date" tick={TICK_SM} tickLine={false} axisLine={false}
+                ticks={makeYearTicks(retData).map(i=>retData[i]?.date)} tickFormatter={yearTick}/>
               <YAxis tick={TICK} tickLine={false} axisLine={false} tickFormatter={yFmtPct} width={45}/>
               <Tooltip content={<TT isDollar={false} blurred={blurred}/>}/>
-              <Bar dataKey="monthly" name="Monthly Return" radius={[2,2,0,0]}>{retData.map((d,i)=><Cell key={i} fill={d.monthly>=0?"#22c55e":"#ef4444"} fillOpacity={.85}/>)}</Bar>
+              <Bar dataKey="monthly" name="Monthly Return" radius={[2,2,0,0]}>
+                {retData.map((d,i)=>(
+                  <Cell key={i} fill={d.monthly>=0?"#22c55e":"#ef4444"}
+                    fillOpacity={Math.abs(d.monthly)===Math.max(...retData.map(x=>Math.abs(x.monthly)))?1:.65}/>
+                ))}
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
         </div>
