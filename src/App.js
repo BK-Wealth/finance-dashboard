@@ -51,6 +51,27 @@ function EyeIcon({ open }) {
   );
 }
 
+// Info tooltip for trust signals
+function InfoTip({ text }) {
+  const [show, setShow] = useState(false);
+  return (
+    <span style={{position:"relative",display:"inline-flex",alignItems:"center",marginLeft:5,cursor:"pointer"}}
+      onMouseEnter={()=>setShow(true)} onMouseLeave={()=>setShow(false)}
+      onClick={()=>setShow(s=>!s)}>
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#475569" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>
+      </svg>
+      {show&&(
+        <div style={{position:"absolute",bottom:"calc(100% + 8px)",left:"50%",transform:"translateX(-50%)",background:"#0f172a",border:"1px solid #253348",borderRadius:8,padding:"10px 14px",width:240,fontSize:11,fontFamily:"Inter,sans-serif",color:"#94a3b8",lineHeight:1.6,zIndex:50,boxShadow:"0 8px 24px #00000060",whiteSpace:"normal",pointerEvents:"none"}}>
+          <div style={{color:"#e2e8f0",fontWeight:600,marginBottom:4,fontSize:11,fontFamily:"IBM Plex Mono,monospace",letterSpacing:".05em"}}>HOW THIS IS CALCULATED</div>
+          {text}
+          <div style={{position:"absolute",top:"100%",left:"50%",transform:"translateX(-50%)",border:"6px solid transparent",borderTopColor:"#253348"}}/>
+        </div>
+      )}
+    </span>
+  );
+}
+
 function recalcReturns(data) {
   if (!data || data.length === 0) return [];
   const base = data[0].Total;
@@ -107,6 +128,7 @@ export default function App() {
   const [goalDate,   setGoalDate]   = useState(() => { try { return localStorage.getItem("fin-goal-date")||"2030-01"; } catch { return "2030-01"; }});
   const [scenRate,   setScenRate]   = useState(30);
   const [scenContrib,setScenContrib]= useState(0);
+  const [scenView,   setScenView]   = useState("zoom"); // "zoom" | "full"
   const [goalRaw,    setGoalRaw]    = useState(false); // true while input is focused
 
   const fmtGoalDisplay = (raw) => {
@@ -147,7 +169,7 @@ export default function App() {
   };
   const handleDel = (date) => { setCustom(prev=>prev.filter(m=>m.Date!==date)); setModal(false); };
   const isCustom = date => custom.some(m=>m.Date===date);
-  const TABS = ["overview","breakdown","returns","assets","goals","allocation","insurance","manage"];
+  const TABS = ["overview","portfolio","performance","goals","insurance","manage"];
 
   // Y-axis formatters that respect blur
   const yFmtDollar = v => blurred ? "●●●" : `$${(v/1000).toFixed(0)}k`;
@@ -204,14 +226,20 @@ export default function App() {
     return m < 600 ? m : null;
   })();
 
-  // ── Scenario chart data — project monthly for up to 10 years ──
+  // ── Scenario chart data — historical actuals + forward projections ──
   const scenChartData = useMemo(() => {
-    const months = 120;
-    const histRate = latest["Ann Return"] / 12;
     const gt = parseFloat(String(goalAmount).replace(/,/g,"")) || 1000000;
+    const histRate = latest["Ann Return"] / 12;
     const rows = [];
+
+    // Past: real actuals from data
+    data.forEach(d => {
+      rows.push({ label: d.Date, actual: Math.round(d.Total), projected: null, historical: null, target: Math.round(gt) });
+    });
+
+    // Future: projections from today
     const now = new Date();
-    for (let m = 0; m <= months; m++) {
+    for (let m = 1; m <= 120; m++) {
       const date = new Date(now.getFullYear(), now.getMonth() + m, 1);
       const label = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}`;
       const r = scenRate / 100 / 12;
@@ -219,17 +247,24 @@ export default function App() {
         ? latest.Total + scenContrib * m
         : latest.Total * Math.pow(1+r,m) + scenContrib * ((Math.pow(1+r,m)-1)/r);
       const historical = latest.Total * Math.pow(1 + histRate, m);
-      rows.push({ label, projected: Math.round(projected), historical: Math.round(historical), target: Math.round(gt) });
+      rows.push({ label, actual: null, projected: Math.round(projected), historical: Math.round(historical), target: Math.round(gt) });
     }
     return rows;
   // eslint-disable-next-line
-  }, [latest.Total, latest["Ann Return"], scenRate, scenContrib, goalAmount]);
+  }, [data, latest.Total, latest["Ann Return"], scenRate, scenContrib, goalAmount]);
 
   return (
-    <div style={{minHeight:"100vh",background:"#070d1a",color:"#e2e8f0",fontFamily:"'IBM Plex Mono',monospace",padding:"28px 24px"}} id="main-wrap">
+    <div style={{minHeight:"100vh",background:"#070d1a",color:"#e2e8f0",fontFamily:"'Inter',sans-serif",padding:"28px 24px"}} id="main-wrap">
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;700&family=Syne:wght@700;800&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;700&family=Inter:wght@400;500;600&family=Syne:wght@700;800&display=swap');
         *{box-sizing:border-box;margin:0;padding:0}
+        /* ── Type scale ── */
+        .t-label{font-size:10px;font-family:'IBM Plex Mono',monospace;letter-spacing:.12em;color:#475569;text-transform:uppercase}
+        .t-value{font-size:20px;font-family:'Syne',sans-serif;font-weight:800;line-height:1.1}
+        .t-body{font-size:13px;font-family:'Inter',sans-serif;color:#94a3b8;line-height:1.5}
+        .t-mono{font-family:'IBM Plex Mono',monospace}
+        .t-caption{font-size:11px;font-family:'Inter',sans-serif;color:#475569}
+        .t-heading{font-family:'Syne',sans-serif;font-weight:800;letter-spacing:-.02em}
         .card{background:#0d1929;border:1px solid #1e293b;border-radius:12px;padding:20px 24px;overflow:hidden}
         .inp{background:#070d1a;border:1px solid #1e293b;border-radius:6px;color:#e2e8f0;font-family:'IBM Plex Mono',monospace;font-size:13px;padding:8px 10px;width:100%;outline:none;transition:border .15s}
         .inp:focus{border-color:#f0b429} .inp:disabled{opacity:.4}
@@ -267,26 +302,45 @@ export default function App() {
 
       {/* ── HEADER ── */}
       <div className="header-row">
-        <div>
-          <div style={{fontSize:10,color:"#475569",letterSpacing:".15em",marginBottom:4}}>PERSONAL FINANCE</div>
-          <h1 style={{fontFamily:"Syne,sans-serif",fontSize:26,fontWeight:800,color:"#f8fafc",letterSpacing:"-.02em"}}>Portfolio Dashboard</h1>
-          <div style={{fontSize:11,color:"#475569",marginTop:4}}>{earliest.Date} → {latest.Date} · {data.length} months{custom.length>0&&<span style={{color:"#f0b42999",marginLeft:8}}>· {custom.length} custom</span>}</div>
+        <div style={{display:"flex",alignItems:"flex-start",gap:16}}>
+          {/* Avatar */}
+          <div style={{position:"relative",width:58,height:38,flexShrink:0,marginTop:2}}>
+            <div style={{position:"absolute",left:0,top:0,width:38,height:38,borderRadius:"50%",background:"linear-gradient(135deg,#3b82f6,#1d4ed8)",border:"2px solid #070d1a",zIndex:2,display:"flex",alignItems:"center",justifyContent:"center"}}>
+              <span style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:14,color:"#fff",lineHeight:1}}>B</span>
+            </div>
+            <div style={{position:"absolute",left:20,top:0,width:38,height:38,borderRadius:"50%",background:"linear-gradient(135deg,#ec4899,#be185d)",border:"2px solid #070d1a",zIndex:1,display:"flex",alignItems:"center",justifyContent:"center"}}>
+              <span style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:14,color:"#fff",lineHeight:1}}>M</span>
+            </div>
+          </div>
+          <div>
+            <div className="t-label" style={{marginBottom:3}}>Bradley & Martine · Personal Finance</div>
+            <h1 className="t-heading" style={{fontSize:24,color:"#f8fafc"}}>Portfolio Dashboard</h1>
+            <div className="t-caption" style={{marginTop:4,display:"flex",alignItems:"center",gap:8}}>
+              <span>{earliest.Date} → {latest.Date}</span>
+              <span style={{color:"#1e293b"}}>·</span>
+              <span>{data.length} months of data</span>
+              <span style={{color:"#1e293b"}}>·</span>
+              <span style={{color:"#f0b42980"}}>Updated {latest.Date}</span>
+              {custom.length>0&&<><span style={{color:"#1e293b"}}>·</span><span style={{color:"#f0b42999"}}>{custom.length} custom</span></>}
+            </div>
+          </div>
         </div>
         <div className="header-right">
           <div style={{display:"flex",gap:8,alignItems:"center"}}>
-            {/* Eye toggle */}
             <button className={`eye-btn${blurred?" active":""}`} onClick={()=>setBlurred(b=>!b)} title={blurred?"Show values":"Hide values"}>
               <EyeIcon open={!blurred}/>
             </button>
-            <button className="btn-p" onClick={openAdd} style={{display:"flex",alignItems:"center",gap:6}}><span style={{fontSize:16,lineHeight:1}}>+</span> Add / Update Month</button>
+            <button className="btn-p" onClick={openAdd} style={{display:"flex",alignItems:"center",gap:6}}><span style={{fontSize:16,lineHeight:1}}>+</span> Add Month</button>
           </div>
           <div style={{textAlign:"right"}}>
-            <div style={{fontSize:10,color:"#475569",letterSpacing:".1em",marginBottom:2}}>CURRENT VALUE</div>
-            <div style={{fontFamily:"Syne,sans-serif",fontSize:28,fontWeight:800,color:"#f0b429"}}>
+            <div className="t-label" style={{marginBottom:4}}>Household Net Worth</div>
+            <div className="t-heading" style={{fontSize:30,color:"#f0b429"}}>
               <Amt v={`$${fmt(latest.Total)}`} blurred={blurred}/>
             </div>
-            <div style={{fontSize:11,color:latest["Monthly return"]>=0?"#22c55e":"#ef4444",marginTop:2}}>
-              {latest["Monthly return"]>=0?"▲":"▼"} {fmtPct(Math.abs(latest["Monthly return"]))} this month
+            <div style={{fontSize:12,fontFamily:"Inter,sans-serif",color:latest["Monthly return"]>=0?"#22c55e":"#ef4444",marginTop:3,display:"flex",alignItems:"center",gap:4,justifyContent:"flex-end"}}>
+              <span style={{fontSize:14}}>{latest["Monthly return"]>=0?"▲":"▼"}</span>
+              <span style={{fontWeight:600}}>{fmtPct(Math.abs(latest["Monthly return"]))}</span>
+              <span style={{color:"#475569"}}>vs last month</span>
             </div>
           </div>
         </div>
@@ -294,18 +348,38 @@ export default function App() {
 
       {/* ── KPI CARDS ── */}
       <div className="kpi-grid">
-        {[
-          {l:"TOTAL RETURN",   v:fmtPct(latest["Cumm Return"]), s:<>From <Amt v={`$${fmt(earliest.Total)}`} blurred={blurred}/></>, c:"#22c55e", isDollar:false},
-          {l:"ANN. RETURN",    v:fmtPct(latest["Ann Return"]),  s:"Since inception", c:"#3b82f6", isDollar:false},
-          {l:"ALL-TIME PEAK",  v:<Amt v={`$${fmt(peak)}`} blurred={blurred}/>, s:"Highest value", c:"#f0b429", isDollar:true},
-          {l:"DRAWDOWN",       v:fmtPct(drawdown), s:"From peak", c:drawdown<-0.05?"#ef4444":"#94a3b8", isDollar:false},
-        ].map((k,i)=>(
-          <div key={i} className="card">
-            <div style={{fontSize:10,color:"#475569",letterSpacing:".12em",marginBottom:8}}>{k.l}</div>
-            <div style={{fontSize:20,fontWeight:700,color:k.c,fontFamily:"Syne,sans-serif"}}>{k.v}</div>
-            <div style={{fontSize:11,color:"#475569",marginTop:4}}>{k.s}</div>
+        <div className="card">
+          <div className="t-label" style={{marginBottom:8,display:"flex",alignItems:"center"}}>
+            Total Return
+            <InfoTip text="Total gain from your starting value of $89,412 in Mar 2019. Calculated as (current value ÷ starting value) − 1."/>
           </div>
-        ))}
+          <div className="t-value" style={{color:"#22c55e"}}>{fmtPct(latest["Cumm Return"])}</div>
+          <div className="t-caption" style={{marginTop:5}}>From <Amt v={`$${fmt(earliest.Total)}`} blurred={blurred}/></div>
+        </div>
+        <div className="card">
+          <div className="t-label" style={{marginBottom:8,display:"flex",alignItems:"center"}}>
+            Ann. Return
+            <InfoTip text="Compound Annual Growth Rate (CAGR) since inception. Formula: (1 + total return)^(12 ÷ months elapsed) − 1. Assumes returns compound monthly."/>
+          </div>
+          <div className="t-value" style={{color:"#3b82f6"}}>{fmtPct(latest["Ann Return"])}</div>
+          <div className="t-caption" style={{marginTop:5}}>Since {earliest.Date}</div>
+        </div>
+        <div className="card">
+          <div className="t-label" style={{marginBottom:8,display:"flex",alignItems:"center"}}>
+            All-Time Peak
+            <InfoTip text="The highest end-of-month portfolio value recorded. Current drawdown measures how far below this peak you currently sit."/>
+          </div>
+          <div className="t-value" style={{color:"#f0b429"}}><Amt v={`$${fmt(peak)}`} blurred={blurred}/></div>
+          <div className="t-caption" style={{marginTop:5}}>Highest recorded value</div>
+        </div>
+        <div className="card">
+          <div className="t-label" style={{marginBottom:8,display:"flex",alignItems:"center"}}>
+            Drawdown
+            <InfoTip text="How far current value sits below the all-time peak. Calculated as (current − peak) ÷ peak. A reading of 0% means you are at a new high."/>
+          </div>
+          <div className="t-value" style={{color:drawdown<-0.05?"#ef4444":"#94a3b8"}}>{fmtPct(drawdown)}</div>
+          <div className="t-caption" style={{marginTop:5}}>From peak of <Amt v={`$${fmt(peak)}`} blurred={blurred}/></div>
+        </div>
       </div>
 
       {/* ── TABS ── */}
@@ -316,7 +390,7 @@ export default function App() {
       {/* ── OVERVIEW ── */}
       {tab==="overview"&&<div style={{display:"grid",gap:20}}>
         <div className="card">
-          <div style={{fontSize:10,color:"#475569",letterSpacing:".12em",marginBottom:16}}>PORTFOLIO VALUE</div>
+          <div className="t-label" style={{marginBottom:16}}>PORTFOLIO VALUE</div>
           <ResponsiveContainer width="100%" height={250}>
             <AreaChart data={valueData} margin={{top:4,right:4,left:8,bottom:0}}>
               <defs><linearGradient id="g1" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#f0b429" stopOpacity={.25}/><stop offset="95%" stopColor="#f0b429" stopOpacity={0}/></linearGradient></defs>
@@ -329,7 +403,7 @@ export default function App() {
           </ResponsiveContainer>
         </div>
         <div className="card">
-          <div style={{fontSize:10,color:"#475569",letterSpacing:".12em",marginBottom:16}}>MONTHLY RETURNS</div>
+          <div className="t-label" style={{marginBottom:16}}>MONTHLY RETURNS</div>
           <ResponsiveContainer width="100%" height={170}>
             <BarChart data={retData} margin={{top:4,right:4,left:8,bottom:0}}>
               <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false}/>
@@ -343,7 +417,7 @@ export default function App() {
         <div className="best-worst-grid">
           {[{l:"🏆 BEST MONTHS",d:best3,c:"#22c55e"},{l:"📉 WORST MONTHS",d:worst3,c:"#ef4444"}].map(({l,d,c})=>(
             <div key={l} className="card">
-              <div style={{fontSize:10,color:"#475569",letterSpacing:".12em",marginBottom:14}}>{l}</div>
+              <div className="t-label" style={{marginBottom:14}}>{l}</div>
               {d.map((r,i)=>(
                 <div key={i} style={{display:"flex",justifyContent:"space-between",marginBottom:10,alignItems:"center"}}>
                   <span style={{fontSize:12,color:"#94a3b8"}}>{isCustom(r.Date)&&<span style={{display:"inline-block",width:7,height:7,borderRadius:"50%",background:"#f0b429",marginRight:5,verticalAlign:"middle"}}/>}{r.Date}</span>
@@ -356,9 +430,9 @@ export default function App() {
       </div>}
 
       {/* ── BREAKDOWN ── */}
-      {tab==="breakdown"&&<div style={{display:"grid",gap:20}}>
+      {tab==="portfolio"&&<div style={{display:"grid",gap:20}}>
         <div className="card">
-          <div style={{fontSize:10,color:"#475569",letterSpacing:".12em",marginBottom:16}}>STACKED ASSET BREAKDOWN</div>
+          <div className="t-label" style={{marginBottom:16}}>STACKED ASSET BREAKDOWN</div>
           <ResponsiveContainer width="100%" height={300}>
             <AreaChart data={bdData} margin={{top:4,right:4,left:8,bottom:0}}>
               <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false}/>
@@ -370,7 +444,7 @@ export default function App() {
           </ResponsiveContainer>
         </div>
         <div className="card">
-          <div style={{fontSize:10,color:"#475569",letterSpacing:".12em",marginBottom:16}}>INDIVIDUAL ASSETS</div>
+          <div className="t-label" style={{marginBottom:16}}>INDIVIDUAL ASSETS</div>
           <ResponsiveContainer width="100%" height={260}>
             <LineChart data={bdData} margin={{top:4,right:4,left:8,bottom:0}}>
               <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false}/>
@@ -382,12 +456,41 @@ export default function App() {
             </LineChart>
           </ResponsiveContainer>
         </div>
+
+        {/* Allocation */}
+        <div className="card">
+          <div className="t-label" style={{marginBottom:16}}>
+            CURRENT ALLOCATION — {latest.Date} — <Amt v={`$${fmt(latest.Total)}`} blurred={blurred}/>
+          </div>
+          <div style={{display:"flex",alignItems:"center",gap:32,flexWrap:"wrap"}}>
+            <PieChart width={220} height={220}>
+              <Pie data={pie} cx={105} cy={105} innerRadius={65} outerRadius={100} dataKey="value" stroke="none">
+                {pie.map((d,i)=><Cell key={i} fill={PALETTE[d.name]}/>)}
+              </Pie>
+              <text x={105} y={100} textAnchor="middle" dominantBaseline="middle" fill="#f0b429" fontSize={blurred?20:18} fontFamily="Syne" fontWeight={800}>
+                {blurred ? "●●●" : `$${fmt(latest.Total/1000)}k`}
+              </text>
+              <text x={105} y={120} textAnchor="middle" dominantBaseline="middle" fill="#475569" fontSize={10} fontFamily="IBM Plex Mono">TOTAL</text>
+            </PieChart>
+            <div style={{flex:1,minWidth:220}}>
+              {pie.map(d=>(
+                <div key={d.name} style={{display:"flex",alignItems:"center",gap:10,marginBottom:9}}>
+                  <div style={{width:9,height:9,borderRadius:2,background:PALETTE[d.name],flexShrink:0}}/>
+                  <span style={{fontSize:12,color:"#94a3b8",width:56}}>{d.name}</span>
+                  <div style={{flex:1,height:4,background:"#1e293b",borderRadius:2,overflow:"hidden"}}><div style={{width:`${pieTotal>0?(d.value/pieTotal*100).toFixed(1):0}%`,height:"100%",background:PALETTE[d.name],borderRadius:2}}/></div>
+                  <span style={{fontSize:12,color:"#e2e8f0",width:80,textAlign:"right"}}><Amt v={`$${fmt(d.value)}`} blurred={blurred}/></span>
+                  <span style={{fontSize:11,color:"#475569",width:38,textAlign:"right"}}>{pieTotal>0?(d.value/pieTotal*100).toFixed(1):0}%</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       </div>}
 
-      {/* ── RETURNS ── */}
-      {tab==="returns"&&<div style={{display:"grid",gap:20}}>
+      {/* ── PERFORMANCE ── */}
+      {tab==="performance"&&<div style={{display:"grid",gap:20}}>
         <div className="card">
-          <div style={{fontSize:10,color:"#475569",letterSpacing:".12em",marginBottom:16}}>CUMULATIVE RETURN</div>
+          <div className="t-label" style={{marginBottom:16}}>CUMULATIVE RETURN</div>
           <ResponsiveContainer width="100%" height={230}>
             <AreaChart data={retData} margin={{top:4,right:4,left:8,bottom:0}}>
               <defs><linearGradient id="g2" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#3b82f6" stopOpacity={.3}/><stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/></linearGradient></defs>
@@ -400,7 +503,7 @@ export default function App() {
           </ResponsiveContainer>
         </div>
         <div className="card">
-          <div style={{fontSize:10,color:"#475569",letterSpacing:".12em",marginBottom:16}}>ANNUALISED RETURN</div>
+          <div className="t-label" style={{marginBottom:16}}>ANNUALISED RETURN</div>
           <ResponsiveContainer width="100%" height={200}>
             <LineChart data={retData} margin={{top:4,right:4,left:8,bottom:0}}>
               <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false}/>
@@ -412,7 +515,7 @@ export default function App() {
           </ResponsiveContainer>
         </div>
         <div className="card">
-          <div style={{fontSize:10,color:"#475569",letterSpacing:".12em",marginBottom:14}}>RETURNS BY YEAR</div>
+          <div className="t-label" style={{marginBottom:14}}>RETURNS BY YEAR</div>
           {["2019","2020","2021","2022","2023","2024","2025","2026"].map(yr=>{
             const yRows=data.filter(d=>d.Date.startsWith(yr));
             if(!yRows.length) return null;
@@ -420,14 +523,10 @@ export default function App() {
             return <div key={yr} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:"1px solid #0f1e33"}}><span style={{fontSize:12,color:"#94a3b8"}}>{yr}</span><span style={{fontSize:11,color:"#475569"}}>{yRows.slice(1).length} months</span><span style={{fontSize:14,fontWeight:700,color:compound>=0?"#22c55e":"#ef4444"}}>{fmtPct(compound)}</span></div>;
           })}
         </div>
-      </div>}
 
-
-      {/* ── ASSETS ── */}
-      {tab==="assets"&&<div style={{display:"grid",gap:20}}>
-        {/* Historical period returns table */}
+{/* Historical period returns table */}
         <div className="card">
-          <div style={{fontSize:10,color:"#475569",letterSpacing:".12em",marginBottom:16}}>HISTORICAL PERIOD RETURNS</div>
+          <div className="t-label" style={{marginBottom:16}}>HISTORICAL PERIOD RETURNS</div>
           <div style={{overflowX:"auto",WebkitOverflowScrolling:"touch"}}>
             <table style={{width:"100%",borderCollapse:"collapse",fontSize:12,minWidth:400}}>
               <thead>
@@ -468,7 +567,7 @@ export default function App() {
 
         {/* Asset-level returns */}
         <div className="card">
-          <div style={{fontSize:10,color:"#475569",letterSpacing:".12em",marginBottom:16}}>ASSET-LEVEL RETURNS</div>
+          <div className="t-label" style={{marginBottom:16}}>ASSET-LEVEL RETURNS</div>
           <div style={{overflowX:"auto",WebkitOverflowScrolling:"touch"}}>
             <table style={{width:"100%",borderCollapse:"collapse",fontSize:12,minWidth:500}}>
               <thead>
@@ -516,7 +615,7 @@ export default function App() {
 
         {/* Goal tracker */}
         <div className="card">
-          <div style={{fontSize:10,color:"#475569",letterSpacing:".12em",marginBottom:16}}>PORTFOLIO GOAL</div>
+          <div className="t-label" style={{marginBottom:16}}>PORTFOLIO GOAL</div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"12px 20px",marginBottom:20}}>
             <div>
               <label style={{fontSize:10,color:"#475569",letterSpacing:".1em",display:"block",marginBottom:6}}>TARGET AMOUNT</label>
@@ -568,7 +667,7 @@ export default function App() {
 
         {/* Scenario modelling */}
         <div className="card">
-          <div style={{fontSize:10,color:"#475569",letterSpacing:".12em",marginBottom:16}}>SCENARIO MODELLING</div>
+          <div className="t-label" style={{marginBottom:16}}>SCENARIO MODELLING</div>
 
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"12px 20px",marginBottom:24}}>
             <div>
@@ -612,41 +711,71 @@ export default function App() {
 
           {/* Scenario line chart */}
           <div style={{marginBottom:16}}>
-            <div style={{display:"flex",gap:20,marginBottom:10,flexWrap:"wrap"}}>
-              <div style={{display:"flex",alignItems:"center",gap:6,fontSize:11,color:"#94a3b8"}}>
-                <span style={{display:"inline-block",width:24,height:2,background:"#f0b429",borderRadius:2}}/> Scenario ({scenRate}%{scenContrib>0?` + $${fmt(scenContrib)}/mo`:""})
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12,flexWrap:"wrap",gap:8}}>
+              <div style={{display:"flex",gap:16,flexWrap:"wrap"}}>
+              {[
+                {color:"#f0b429", dash:false,  label:`Scenario (${scenRate}%${scenContrib>0?` + $${fmt(scenContrib)}/mo`:""})`},
+                {color:"#a78bfa", dash:"6 3",  label:`Hist. rate (${fmtPct(latest["Ann Return"])} p.a.)`},
+                {color:"#22c55e", dash:"3 3",  label:"Target"},
+                {color:"#e2e8f0", dash:false,  label:"Actual portfolio"},
+              ].map((l,i)=>(
+                <div key={i} style={{display:"flex",alignItems:"center",gap:6}}>
+                  <svg width="24" height="10">
+                    <line x1="0" y1="5" x2="24" y2="5"
+                      stroke={l.color} strokeWidth={l.dash?"1.5":"2.5"}
+                      strokeDasharray={l.dash||"none"}/>
+                  </svg>
+                  <span style={{fontSize:11,fontFamily:"Inter,sans-serif",color:"#94a3b8"}}>{l.label}</span>
+                </div>
+              ))}
               </div>
-              <div style={{display:"flex",alignItems:"center",gap:6,fontSize:11,color:"#94a3b8"}}>
-                <span style={{display:"inline-block",width:24,height:2,background:"#3b82f6",borderRadius:2,borderTop:"2px dashed #3b82f6"}}/> Historical trajectory ({fmtPct(latest["Ann Return"])} p.a.)
-              </div>
-              <div style={{display:"flex",alignItems:"center",gap:6,fontSize:11,color:"#94a3b8"}}>
-                <span style={{display:"inline-block",width:24,height:2,background:"#22c55e",borderRadius:2,opacity:.7}}/> Target
+              <div style={{display:"flex",gap:4}}>
+                {["zoom","full"].map(v=>(
+                  <button key={v} onClick={()=>setScenView(v)}
+                    style={{background:scenView===v?"#1e293b":"transparent",border:"1px solid #1e293b",borderRadius:4,color:scenView===v?"#f0b429":"#475569",fontSize:10,fontFamily:"IBM Plex Mono,monospace",letterSpacing:".05em",padding:"4px 10px",cursor:"pointer"}}>
+                    {v==="zoom"?"ZOOM":"10YR"}
+                  </button>
+                ))}
               </div>
             </div>
-            <ResponsiveContainer width="100%" height={280}>
-              <LineChart data={scenChartData} margin={{top:4,right:4,left:8,bottom:0}}>
-                <defs>
-                  <linearGradient id="gScen" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#f0b429" stopOpacity={0.15}/>
-                    <stop offset="95%" stopColor="#f0b429" stopOpacity={0}/>
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false}/>
-                <XAxis dataKey="label" tick={TICK_SM} tickLine={false} axisLine={false}
-                  ticks={scenChartData.filter((_,i)=>i%12===0).map(d=>d.label)}
-                  tickFormatter={v=>v?v.slice(0,4):""}/>
-                <YAxis tick={TICK_SM} tickLine={false} axisLine={false}
-                  tickFormatter={v=>blurred?"●●●":`$${(v/1000).toFixed(0)}k`} width={55}/>
-                <Tooltip
-                  formatter={(v,name)=>[blurred?"●●●":`$${fmt(v)}`, name]}
-                  labelStyle={{color:"#e2e8f0",fontFamily:"IBM Plex Mono",fontSize:11}}
-                  contentStyle={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:8,fontSize:12,fontFamily:"IBM Plex Mono"}}
-                  itemStyle={{color:"#94a3b8"}}/>
-                <Line type="monotone" dataKey="projected" stroke="#f0b429" strokeWidth={2.5} dot={false} name="Scenario" activeDot={{r:4,fill:"#f0b429"}}/>
-                <Line type="monotone" dataKey="historical" stroke="#3b82f6" strokeWidth={1.5} strokeDasharray="5 4" dot={false} name="Historical rate" activeDot={{r:4,fill:"#3b82f6"}}/>
-                <Line type="monotone" dataKey="target" stroke="#22c55e" strokeWidth={1} strokeDasharray="3 3" dot={false} name="Target" activeDot={false}/>
-              </LineChart>
-            </ResponsiveContainer>
+            {/* Dividing line between past/future */}
+            <div style={{position:"relative"}}>
+              <ResponsiveContainer width="100%" height={300}>
+                <LineChart data={scenChartData} margin={{top:4,right:4,left:8,bottom:0}}>
+                  <defs>
+                    <linearGradient id="gActual" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#e2e8f0" stopOpacity={0.1}/>
+                      <stop offset="95%" stopColor="#e2e8f0" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false}/>
+                  <XAxis dataKey="label" tick={TICK_SM} tickLine={false} axisLine={false}
+                    ticks={scenChartData.filter((_,i)=>i%12===0).map(d=>d.label)}
+                    tickFormatter={v=>v?v.slice(0,4):""}/>
+                  <YAxis tick={TICK_SM} tickLine={false} axisLine={false}
+                    tickFormatter={v=>blurred?"●●●":`$${(v/1000).toFixed(0)}k`} width={55}/>
+                  <Tooltip
+                    formatter={(v,name)=>v==null?null:[blurred?"●●●":`$${fmt(v)}`, name]}
+                    labelStyle={{color:"#e2e8f0",fontFamily:"IBM Plex Mono",fontSize:11}}
+                    contentStyle={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:8,fontSize:12,fontFamily:"IBM Plex Mono"}}
+                    itemStyle={{color:"#94a3b8"}}/>
+                  {/* Actual historical line */}
+                  <Line type="monotone" dataKey="actual" stroke="#e2e8f0" strokeWidth={2.5} dot={false} name="Actual" connectNulls={false} activeDot={{r:3,fill:"#e2e8f0"}}/>
+                  {/* Scenario projection */}
+                  <Line type="monotone" dataKey="projected" stroke="#f0b429" strokeWidth={2.5} dot={false} name="Scenario" connectNulls={false} activeDot={{r:4,fill:"#f0b429"}}/>
+                  {/* Historical rate projection */}
+                  <Line type="monotone" dataKey="historical" stroke="#a78bfa" strokeWidth={1.5} strokeDasharray="6 3" dot={false} name="Hist. rate" connectNulls={false} activeDot={{r:3,fill:"#a78bfa"}}/>
+                  {/* Target flat line */}
+                  <Line type="monotone" dataKey="target" stroke="#22c55e" strokeWidth={1} strokeDasharray="3 3" dot={false} name="Target" activeDot={false}/>
+                  {/* "Today" reference line label */}
+                  <Line type="monotone" dataKey="actual" stroke="none" dot={false} name=" "/>
+                </LineChart>
+              </ResponsiveContainer>
+              {/* TODAY label */}
+              <div style={{position:"absolute",top:8,right:8,fontSize:10,fontFamily:"IBM Plex Mono,monospace",color:"#475569",background:"#070d1a",padding:"2px 6px",borderRadius:4,border:"1px solid #1e293b"}}>
+                ← ACTUAL &nbsp;·&nbsp; PROJECTED →
+              </div>
+            </div>
           </div>
 
           {/* Goal projection at target date */}
@@ -683,35 +812,7 @@ export default function App() {
         </div>
       </div>}
 
-      {/* ── ALLOCATION ── */}
-      {tab==="allocation"&&<div className="card">
-        <div style={{fontSize:10,color:"#475569",letterSpacing:".12em",marginBottom:16}}>
-          CURRENT ALLOCATION — {latest.Date} — <Amt v={`$${fmt(latest.Total)}`} blurred={blurred}/>
-        </div>
-        <div style={{display:"flex",alignItems:"center",gap:32,flexWrap:"wrap"}}>
-          <PieChart width={220} height={220}>
-            <Pie data={pie} cx={105} cy={105} innerRadius={65} outerRadius={100} dataKey="value" stroke="none">
-              {pie.map((d,i)=><Cell key={i} fill={PALETTE[d.name]}/>)}
-            </Pie>
-            {/* Centre text always shows shape of number, blur via foreignObject workaround not possible in SVG — show ●●● when blurred */}
-            <text x={105} y={100} textAnchor="middle" dominantBaseline="middle" fill="#f0b429" fontSize={blurred?20:18} fontFamily="Syne" fontWeight={800}>
-              {blurred ? "●●●" : `$${fmt(latest.Total/1000)}k`}
-            </text>
-            <text x={105} y={120} textAnchor="middle" dominantBaseline="middle" fill="#475569" fontSize={10} fontFamily="IBM Plex Mono">TOTAL</text>
-          </PieChart>
-          <div style={{flex:1,minWidth:220}}>
-            {pie.map(d=>(
-              <div key={d.name} style={{display:"flex",alignItems:"center",gap:10,marginBottom:9}}>
-                <div style={{width:9,height:9,borderRadius:2,background:PALETTE[d.name],flexShrink:0}}/>
-                <span style={{fontSize:12,color:"#94a3b8",width:56}}>{d.name}</span>
-                <div style={{flex:1,height:4,background:"#1e293b",borderRadius:2,overflow:"hidden"}}><div style={{width:`${pieTotal>0?(d.value/pieTotal*100).toFixed(1):0}%`,height:"100%",background:PALETTE[d.name],borderRadius:2}}/></div>
-                <span style={{fontSize:12,color:"#e2e8f0",width:80,textAlign:"right"}}><Amt v={`$${fmt(d.value)}`} blurred={blurred}/></span>
-                <span style={{fontSize:11,color:"#475569",width:38,textAlign:"right"}}>{pieTotal>0?(d.value/pieTotal*100).toFixed(1):0}%</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>}
+
 
 
       {/* ── INSURANCE ── */}
@@ -811,7 +912,7 @@ export default function App() {
         {/* Household Totals */}
         <div className="insurance-summary-grid">
           <div className="card">
-            <div style={{fontSize:10,color:"#475569",letterSpacing:".12em",marginBottom:16}}>HOUSEHOLD COVERAGE TOTALS</div>
+            <div className="t-label" style={{marginBottom:16}}>HOUSEHOLD COVERAGE TOTALS</div>
             {[
               {l:"Total Life Insurance",  v:"$1,988,337",           c:"#22c55e"},
               {l:"Total Trauma Cover",    v:"$816,763",             c:"#ec4899"},
@@ -827,7 +928,7 @@ export default function App() {
             ))}
           </div>
           <div className="card">
-            <div style={{fontSize:10,color:"#475569",letterSpacing:".12em",marginBottom:16}}>COVER END SCHEDULE</div>
+            <div className="t-label" style={{marginBottom:16}}>COVER END SCHEDULE</div>
             {[
               {l:"Income Protection",    v:"Age 65",           c:"#06b6d4"},
               {l:"TPD",                  v:"Age 65",           c:"#a78bfa"},
