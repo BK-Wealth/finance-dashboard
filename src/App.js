@@ -543,6 +543,128 @@ export default function App() {
 
       {/* ── BREAKDOWN ── */}
       {tab==="portfolio"&&<div style={{display:"grid",gap:20}}>
+
+        {/* Diversification table */}
+        {(() => {
+          const CATEGORY_MAP = {
+            EE:"Equities", Super:"Equities", Stake:"Equities",
+            EVP:"Venture Capital", SPV:"Venture Capital",
+            Watch:"Assets", Ring:"Assets", Gold:"Assets",
+            Cash:"Cash", Crypto:"Crypto"
+          };
+          const CAT_COLOR = {
+            "Equities":"#3b82f6","Venture Capital":"#a78bfa",
+            "Assets":"#f59e0b","Cash":"#94a3b8","Crypto":"#f97316"
+          };
+          // Group assets into categories
+          const catTotals = {};
+          const catAssets = {};
+          ASSETS.forEach(a => {
+            const cat = CATEGORY_MAP[a];
+            const val = Math.max(0, latest[a] || 0);
+            catTotals[cat] = (catTotals[cat] || 0) + val;
+            if (!catAssets[cat]) catAssets[cat] = [];
+            catAssets[cat].push({ name: a, value: val });
+          });
+          const grandTotal = Object.values(catTotals).reduce((s,v)=>s+v,0);
+          const cats = Object.entries(catTotals).sort((a,b)=>b[1]-a[1]);
+
+          return (
+            <div className="card">
+              <div className="chart-label"><span>Diversification</span><span style={{color:"#334155"}}>{latest.Date}</span></div>
+
+              {/* Stacked bar */}
+              <div style={{display:"flex",height:10,borderRadius:6,overflow:"hidden",marginBottom:20,gap:2}}>
+                {cats.map(([cat, val])=>(
+                  <div key={cat} style={{
+                    flex: val/grandTotal, background: CAT_COLOR[cat],
+                    transition:"flex .4s ease", borderRadius:3
+                  }}/>
+                ))}
+              </div>
+
+              {/* Category rows */}
+              <div style={{display:"flex",flexDirection:"column",gap:2}}>
+                {/* Header */}
+                <div style={{display:"grid",gridTemplateColumns:"140px 1fr 90px 80px 80px",gap:8,padding:"6px 8px",marginBottom:4}}>
+                  {["Category / Asset","","Value","Allocation","vs Total"].map((h,i)=>(
+                    <div key={i} className="t-label" style={{textAlign:i>1?"right":"left",fontSize:9}}>{h}</div>
+                  ))}
+                </div>
+
+                {cats.map(([cat, catVal]) => {
+                  const pct = grandTotal > 0 ? catVal/grandTotal : 0;
+                  const assets = catAssets[cat].filter(a=>a.value>0).sort((a,b)=>b.value-a.value);
+                  return (
+                    <div key={cat} style={{marginBottom:8}}>
+                      {/* Category row */}
+                      <div style={{display:"grid",gridTemplateColumns:"140px 1fr 90px 80px 80px",gap:8,
+                        padding:"9px 8px",background:"#0a1520",borderRadius:8,
+                        borderLeft:`3px solid ${CAT_COLOR[cat]}`,alignItems:"center"}}>
+                        <div style={{display:"flex",alignItems:"center",gap:8}}>
+                          <div style={{width:8,height:8,borderRadius:2,background:CAT_COLOR[cat],flexShrink:0}}/>
+                          <span style={{fontSize:12,fontWeight:600,color:"#e2e8f0",fontFamily:"'Inter',sans-serif"}}>{cat}</span>
+                        </div>
+                        {/* Bar */}
+                        <div style={{height:4,background:"#1e293b",borderRadius:2,overflow:"hidden"}}>
+                          <div style={{width:`${pct*100}%`,height:"100%",background:CAT_COLOR[cat],borderRadius:2,opacity:.7}}/>
+                        </div>
+                        <div style={{textAlign:"right",fontSize:13,fontFamily:"'IBM Plex Mono',monospace",fontWeight:700,color:"#e2e8f0"}}>
+                          <Amt v={`$${fmt(catVal)}`} blurred={blurred}/>
+                        </div>
+                        <div style={{textAlign:"right",fontSize:13,fontFamily:"'IBM Plex Mono',monospace",color:CAT_COLOR[cat],fontWeight:600}}>
+                          {(pct*100).toFixed(1)}%
+                        </div>
+                        <div style={{textAlign:"right",fontSize:11,fontFamily:"'IBM Plex Mono',monospace",color:"#475569"}}>
+                          {(pct*100).toFixed(1)}%
+                        </div>
+                      </div>
+                      {/* Asset sub-rows */}
+                      {assets.map(a=>{
+                        const aPct = grandTotal>0 ? a.value/grandTotal : 0;
+                        const cPct = catVal>0 ? a.value/catVal : 0;
+                        return (
+                          <div key={a.name} style={{display:"grid",gridTemplateColumns:"140px 1fr 90px 80px 80px",gap:8,
+                            padding:"6px 8px 6px 20px",alignItems:"center",borderBottom:"1px solid #0a1520"}}>
+                            <div style={{display:"flex",alignItems:"center",gap:8}}>
+                              <div style={{width:6,height:6,borderRadius:1,background:PALETTE[a.name],flexShrink:0}}/>
+                              <span style={{fontSize:11,color:"#64748b",fontFamily:"'Inter',sans-serif"}}>{a.name}</span>
+                            </div>
+                            <div style={{height:3,background:"#1e293b",borderRadius:2,overflow:"hidden"}}>
+                              <div style={{width:`${aPct*100}%`,height:"100%",background:PALETTE[a.name],borderRadius:2,opacity:.6}}/>
+                            </div>
+                            <div style={{textAlign:"right",fontSize:11,fontFamily:"'IBM Plex Mono',monospace",color:"#94a3b8"}}>
+                              <Amt v={`$${fmt(a.value)}`} blurred={blurred}/>
+                            </div>
+                            <div style={{textAlign:"right",fontSize:11,fontFamily:"'IBM Plex Mono',monospace",color:"#64748b"}}>
+                              {(cPct*100).toFixed(1)}%
+                            </div>
+                            <div style={{textAlign:"right",fontSize:11,fontFamily:"'IBM Plex Mono',monospace",color:"#334155"}}>
+                              {(aPct*100).toFixed(1)}%
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })}
+
+                {/* Total row */}
+                <div style={{display:"grid",gridTemplateColumns:"140px 1fr 90px 80px 80px",gap:8,
+                  padding:"10px 8px",borderTop:"1px solid #1e293b",marginTop:4,alignItems:"center"}}>
+                  <span style={{fontSize:11,fontFamily:"'IBM Plex Mono',monospace",color:"#475569",letterSpacing:".1em"}}>TOTAL</span>
+                  <div/>
+                  <div style={{textAlign:"right",fontSize:13,fontFamily:"'IBM Plex Mono',monospace",fontWeight:700,color:"#f0b429"}}>
+                    <Amt v={`$${fmt(grandTotal)}`} blurred={blurred}/>
+                  </div>
+                  <div style={{textAlign:"right",fontSize:13,fontFamily:"'IBM Plex Mono',monospace",color:"#475569"}}>100%</div>
+                  <div style={{textAlign:"right",fontSize:13,fontFamily:"'IBM Plex Mono',monospace",color:"#475569"}}>100%</div>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
         <div className="card">
           <div className="t-label" style={{marginBottom:16}}>STACKED ASSET BREAKDOWN</div>
           <ResponsiveContainer width="100%" height={300}>
