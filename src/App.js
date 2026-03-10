@@ -29,7 +29,7 @@ const makeYearTicks = (data) => {
 // Blurred dollar amount wrapper
 function Amt({ v, blurred, style={} }) {
   return (
-    <span style={{ display:"inline-block", filter:blurred?"blur(7px)":"none", transition:"filter .2s", userSelect:blurred?"none":"auto", ...style }}>
+    <span style={{ display:"inline-block", filter:blurred?"blur(10px)":"none", transition:"filter .2s", userSelect:blurred?"none":"auto", ...style }}>
       {v}
     </span>
   );
@@ -396,7 +396,7 @@ export default function App() {
         <div style={{position:"relative",display:"flex",justifyContent:"space-between",alignItems:"flex-end",flexWrap:"wrap",gap:20}}>
           <div>
             <div style={{fontSize:10,fontFamily:"'IBM Plex Mono',monospace",letterSpacing:".18em",color:"#475569",textTransform:"uppercase",marginBottom:8}}>Household Net Worth</div>
-            <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:"clamp(48px,6vw,72px)",lineHeight:1,
+            <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:"clamp(32px,3.5vw,46px)",lineHeight:1,
               color:"#f0b429",letterSpacing:"-.03em",
               textShadow: monthUp ? "0 0 40px #22c55e30,0 0 80px #f0b42920" : "0 0 40px #ef444430,0 0 80px #f0b42920"}}>
               <Amt v={`$${fmt(latest.Total)}`} blurred={blurred}/>
