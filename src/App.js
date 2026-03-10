@@ -103,6 +103,10 @@ export default function App() {
   const [form, setForm] = useState(blankForm());
   const [flash, setFlash] = useState(false);
   const [blurred, setBlurred] = useState(false);
+  const [goalAmount, setGoalAmount] = useState(() => { try { return localStorage.getItem("fin-goal-amt")||"1000000"; } catch { return "1000000"; }});
+  const [goalDate,   setGoalDate]   = useState(() => { try { return localStorage.getItem("fin-goal-date")||"2030-01"; } catch { return "2030-01"; }});
+  const [scenRate,   setScenRate]   = useState(30);
+  const [scenContrib,setScenContrib]= useState(0);
 
   const data = useMemo(() => mergeData(SEED_DATA, custom), [custom]);
   if (!data || data.length === 0) return <div style={{color:"white",padding:40}}>Loading...</div>;
@@ -136,11 +140,62 @@ export default function App() {
   };
   const handleDel = (date) => { setCustom(prev=>prev.filter(m=>m.Date!==date)); setModal(false); };
   const isCustom = date => custom.some(m=>m.Date===date);
-  const TABS = ["overview","breakdown","returns","allocation","insurance","manage"];
+  const TABS = ["overview","breakdown","returns","assets","goals","allocation","insurance","manage"];
 
   // Y-axis formatters that respect blur
   const yFmtDollar = v => blurred ? "●●●" : `$${(v/1000).toFixed(0)}k`;
   const yFmtPct = v => `${(v*100).toFixed(0)}%`;
+
+  // ── Historical period returns ──
+  const periodReturn = (months) => {
+    if (data.length <= months) return null;
+    const start = data[data.length - 1 - months].Total;
+    const end   = latest.Total;
+    const total = end / start - 1;
+    const ann   = Math.pow(1 + total, 12 / months) - 1;
+    return { total, ann };
+  };
+  const ret1y  = periodReturn(12);
+  const ret3y  = periodReturn(36);
+  const ret5y  = periodReturn(60);
+  const ret10y = periodReturn(120);
+
+  // ── Asset-level returns ──
+  const assetReturn = (asset, months) => {
+    const rows = data.filter(d => d[asset] != null && d[asset] !== 0);
+    if (rows.length <= months) return null;
+    const startVal = rows[rows.length - 1 - months]?.[asset];
+    const endVal   = rows[rows.length - 1]?.[asset];
+    if (!startVal || startVal === 0) return null;
+    return endVal / startVal - 1;
+  };
+
+  // ── Scenario / goal helpers ──
+  const monthsBetween = (dateStr) => {
+    const [yr, mo] = dateStr.split("-").map(Number);
+    const now = new Date();
+    return (yr - now.getFullYear()) * 12 + (mo - now.getMonth() - 1);
+  };
+  const fvProjection = (pv, annualRate, monthlyContrib, months) => {
+    const r = annualRate / 100 / 12;
+    if (r === 0) return pv + monthlyContrib * months;
+    return pv * Math.pow(1 + r, months) + monthlyContrib * ((Math.pow(1 + r, months) - 1) / r);
+  };
+  const goalMonths   = Math.max(1, monthsBetween(goalDate));
+  const goalTarget   = parseFloat(goalAmount.replace(/,/g,"")) || 1000000;
+  const goalProgress = Math.min(100, (latest.Total / goalTarget) * 100);
+  const projAtGoal   = fvProjection(latest.Total, scenRate, scenContrib, goalMonths);
+  const scenYears    = [1,3,5,10].map(y => ({
+    label: `${y}Y`, months: y*12,
+    value: fvProjection(latest.Total, scenRate, scenContrib, y*12)
+  }));
+  // Project months to reach goal
+  const monthsToGoal = (() => {
+    const r = scenRate / 100 / 12;
+    let pv = latest.Total; let m = 0;
+    while (pv < goalTarget && m < 600) { pv = pv*(1+r)+scenContrib; m++; }
+    return m < 600 ? m : null;
+  })();
 
   return (
     <div style={{minHeight:"100vh",background:"#070d1a",color:"#e2e8f0",fontFamily:"'IBM Plex Mono',monospace",padding:"28px 24px"}} id="main-wrap">
@@ -336,6 +391,217 @@ export default function App() {
             const compound=yRows.slice(1).reduce((acc,d)=>acc*(1+d["Monthly return"]),1)-1;
             return <div key={yr} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:"1px solid #0f1e33"}}><span style={{fontSize:12,color:"#94a3b8"}}>{yr}</span><span style={{fontSize:11,color:"#475569"}}>{yRows.slice(1).length} months</span><span style={{fontSize:14,fontWeight:700,color:compound>=0?"#22c55e":"#ef4444"}}>{fmtPct(compound)}</span></div>;
           })}
+        </div>
+      </div>}
+
+
+      {/* ── ASSETS ── */}
+      {tab==="assets"&&<div style={{display:"grid",gap:20}}>
+        {/* Historical period returns table */}
+        <div className="card">
+          <div style={{fontSize:10,color:"#475569",letterSpacing:".12em",marginBottom:16}}>HISTORICAL PERIOD RETURNS</div>
+          <div style={{overflowX:"auto",WebkitOverflowScrolling:"touch"}}>
+            <table style={{width:"100%",borderCollapse:"collapse",fontSize:12,minWidth:400}}>
+              <thead>
+                <tr style={{color:"#475569",fontSize:10,letterSpacing:".08em"}}>
+                  <th style={{textAlign:"left",padding:"8px",borderBottom:"1px solid #1e293b"}}>PERIOD</th>
+                  <th style={{textAlign:"right",padding:"8px",borderBottom:"1px solid #1e293b"}}>TOTAL RETURN</th>
+                  <th style={{textAlign:"right",padding:"8px",borderBottom:"1px solid #1e293b"}}>ANNUALISED</th>
+                  <th style={{textAlign:"right",padding:"8px",borderBottom:"1px solid #1e293b"}}>START VALUE</th>
+                  <th style={{textAlign:"right",padding:"8px",borderBottom:"1px solid #1e293b"}}>END VALUE</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[
+                  {label:"1 Year",  r:ret1y,  months:12},
+                  {label:"3 Year",  r:ret3y,  months:36},
+                  {label:"5 Year",  r:ret5y,  months:60},
+                  {label:"10 Year", r:ret10y, months:120},
+                ].map(({label,r,months})=>{
+                  const startVal = data.length > months ? data[data.length-1-months].Total : null;
+                  return (
+                    <tr key={label} style={{borderBottom:"1px solid #0a1628"}}>
+                      <td style={{padding:"10px 8px",color:"#e2e8f0",fontWeight:700}}>{label}</td>
+                      {r ? <>
+                        <td style={{padding:"10px 8px",textAlign:"right",color:r.total>=0?"#22c55e":"#ef4444",fontWeight:700,fontSize:14}}>{fmtPct(r.total)}</td>
+                        <td style={{padding:"10px 8px",textAlign:"right",color:r.ann>=0?"#3b82f6":"#ef4444",fontWeight:700,fontSize:14}}>{fmtPct(r.ann)} p.a.</td>
+                        <td style={{padding:"10px 8px",textAlign:"right",color:"#94a3b8"}}><Amt v={`$${fmt(startVal)}`} blurred={blurred}/></td>
+                        <td style={{padding:"10px 8px",textAlign:"right",color:"#94a3b8"}}><Amt v={`$${fmt(latest.Total)}`} blurred={blurred}/></td>
+                      </> : <>
+                        <td colSpan={4} style={{padding:"10px 8px",textAlign:"center",color:"#475569",fontSize:11}}>Insufficient data</td>
+                      </>}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Asset-level returns */}
+        <div className="card">
+          <div style={{fontSize:10,color:"#475569",letterSpacing:".12em",marginBottom:16}}>ASSET-LEVEL RETURNS</div>
+          <div style={{overflowX:"auto",WebkitOverflowScrolling:"touch"}}>
+            <table style={{width:"100%",borderCollapse:"collapse",fontSize:12,minWidth:500}}>
+              <thead>
+                <tr style={{color:"#475569",fontSize:10,letterSpacing:".08em"}}>
+                  <th style={{textAlign:"left",padding:"8px",borderBottom:"1px solid #1e293b"}}>ASSET</th>
+                  <th style={{textAlign:"right",padding:"8px",borderBottom:"1px solid #1e293b"}}>CURRENT</th>
+                  <th style={{textAlign:"right",padding:"8px",borderBottom:"1px solid #1e293b"}}>1 MONTH</th>
+                  <th style={{textAlign:"right",padding:"8px",borderBottom:"1px solid #1e293b"}}>3 MONTH</th>
+                  <th style={{textAlign:"right",padding:"8px",borderBottom:"1px solid #1e293b"}}>1 YEAR</th>
+                  <th style={{textAlign:"right",padding:"8px",borderBottom:"1px solid #1e293b"}}>3 YEAR</th>
+                </tr>
+              </thead>
+              <tbody>
+                {ASSETS.filter(a => latest[a] != null && latest[a] > 0).map(a => {
+                  const r1m  = assetReturn(a, 1);
+                  const r3m  = assetReturn(a, 3);
+                  const r1y  = assetReturn(a, 12);
+                  const r3y  = assetReturn(a, 36);
+                  const cell = (r) => r != null
+                    ? <span style={{color:r>=0?"#22c55e":"#ef4444",fontWeight:600}}>{fmtPct(r)}</span>
+                    : <span style={{color:"#475569"}}>—</span>;
+                  return (
+                    <tr key={a} style={{borderBottom:"1px solid #0a1628"}}>
+                      <td style={{padding:"10px 8px",display:"flex",alignItems:"center",gap:8}}>
+                        <span style={{display:"inline-block",width:8,height:8,borderRadius:2,background:PALETTE[a],flexShrink:0}}/>
+                        <span style={{color:"#e2e8f0"}}>{a}</span>
+                      </td>
+                      <td style={{padding:"10px 8px",textAlign:"right",color:"#f0b429",fontWeight:700}}><Amt v={`$${fmt(latest[a])}`} blurred={blurred}/></td>
+                      <td style={{padding:"10px 8px",textAlign:"right"}}>{cell(r1m)}</td>
+                      <td style={{padding:"10px 8px",textAlign:"right"}}>{cell(r3m)}</td>
+                      <td style={{padding:"10px 8px",textAlign:"right"}}>{cell(r1y)}</td>
+                      <td style={{padding:"10px 8px",textAlign:"right"}}>{cell(r3y)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>}
+
+
+      {/* ── GOALS ── */}
+      {tab==="goals"&&<div style={{display:"grid",gap:20}}>
+
+        {/* Goal tracker */}
+        <div className="card">
+          <div style={{fontSize:10,color:"#475569",letterSpacing:".12em",marginBottom:16}}>PORTFOLIO GOAL</div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"12px 20px",marginBottom:20}}>
+            <div>
+              <label style={{fontSize:10,color:"#475569",letterSpacing:".1em",display:"block",marginBottom:6}}>TARGET AMOUNT ($)</label>
+              <input className="inp" type="number" value={goalAmount}
+                onChange={e=>{setGoalAmount(e.target.value);try{localStorage.setItem("fin-goal-amt",e.target.value)}catch{}}}
+                placeholder="1000000"/>
+            </div>
+            <div>
+              <label style={{fontSize:10,color:"#475569",letterSpacing:".1em",display:"block",marginBottom:6}}>TARGET DATE (YYYY-MM)</label>
+              <input className="inp" type="text" value={goalDate}
+                onChange={e=>{setGoalDate(e.target.value);try{localStorage.setItem("fin-goal-date",e.target.value)}catch{}}}
+                placeholder="2030-01"/>
+            </div>
+          </div>
+
+          {/* Progress bar */}
+          <div style={{marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"flex-end"}}>
+            <span style={{fontSize:11,color:"#475569"}}>PROGRESS TO GOAL</span>
+            <span style={{fontSize:11,color:"#f0b429",fontWeight:700}}>{goalProgress.toFixed(1)}%</span>
+          </div>
+          <div style={{height:12,background:"#1e293b",borderRadius:6,overflow:"hidden",marginBottom:16}}>
+            <div style={{height:"100%",width:`${goalProgress}%`,background:"linear-gradient(90deg,#3b82f6,#f0b429)",borderRadius:6,transition:"width .5s"}}/>
+          </div>
+
+          <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12,minWidth:0}}>
+            {[
+              {l:"CURRENT",  v:<Amt v={`$${fmt(latest.Total)}`} blurred={blurred}/>, c:"#f0b429"},
+              {l:"TARGET",   v:<Amt v={`$${fmt(goalTarget)}`} blurred={blurred}/>,   c:"#22c55e"},
+              {l:"REMAINING",v:<Amt v={`$${fmt(Math.max(0,goalTarget-latest.Total))}`} blurred={blurred}/>, c:"#94a3b8"},
+            ].map((k,i)=>(
+              <div key={i} style={{background:"#070d1a",borderRadius:8,padding:"12px 14px",border:"1px solid #1e293b"}}>
+                <div style={{fontSize:10,color:"#475569",letterSpacing:".1em",marginBottom:4}}>{k.l}</div>
+                <div style={{fontSize:16,fontWeight:700,color:k.c,fontFamily:"Syne,sans-serif"}}>{k.v}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Scenario modelling */}
+        <div className="card">
+          <div style={{fontSize:10,color:"#475569",letterSpacing:".12em",marginBottom:16}}>SCENARIO MODELLING</div>
+
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"12px 20px",marginBottom:24}}>
+            <div>
+              <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
+                <label style={{fontSize:10,color:"#475569",letterSpacing:".1em"}}>ANNUAL GROWTH RATE</label>
+                <span style={{fontSize:12,color:"#f0b429",fontWeight:700}}>{scenRate}%</span>
+              </div>
+              <input type="range" min={0} max={60} step={1} value={scenRate}
+                onChange={e=>setScenRate(Number(e.target.value))}
+                style={{width:"100%",accentColor:"#f0b429"}}/>
+              <div style={{display:"flex",justifyContent:"space-between",fontSize:10,color:"#475569",marginTop:3}}>
+                <span>0%</span><span>60%</span>
+              </div>
+            </div>
+            <div>
+              <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
+                <label style={{fontSize:10,color:"#475569",letterSpacing:".1em"}}>MONTHLY CONTRIBUTION</label>
+                <span style={{fontSize:12,color:"#f0b429",fontWeight:700}}><Amt v={`$${fmt(scenContrib)}`} blurred={blurred}/></span>
+              </div>
+              <input type="range" min={0} max={20000} step={500} value={scenContrib}
+                onChange={e=>setScenContrib(Number(e.target.value))}
+                style={{width:"100%",accentColor:"#f0b429"}}/>
+              <div style={{display:"flex",justifyContent:"space-between",fontSize:10,color:"#475569",marginTop:3}}>
+                <span>$0</span><span>$20k/mo</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Projections */}
+          <div className="kpi-grid" style={{gap:10,marginBottom:20}}>
+            {scenYears.map(s=>(
+              <div key={s.label} style={{background:"#070d1a",borderRadius:8,padding:"12px 10px",border:"1px solid #1e293b",textAlign:"center"}}>
+                <div style={{fontSize:10,color:"#475569",letterSpacing:".1em",marginBottom:6}}>{s.label}</div>
+                <div style={{fontSize:14,fontWeight:700,color:"#3b82f6",fontFamily:"Syne,sans-serif"}}><Amt v={`$${fmt(s.value)}`} blurred={blurred}/></div>
+                <div style={{fontSize:10,color:s.value>=goalTarget?"#22c55e":"#475569",marginTop:4}}>
+                  {s.value>=goalTarget?"✓ Goal met":""}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Goal projection at target date */}
+          <div style={{background:"#070d1a",border:"1px solid #1e293b",borderRadius:10,padding:"16px 20px",marginBottom:12}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:12}}>
+              <div>
+                <div style={{fontSize:10,color:"#475569",letterSpacing:".1em",marginBottom:4}}>PROJECTED VALUE AT {goalDate}</div>
+                <div style={{fontFamily:"Syne,sans-serif",fontSize:24,fontWeight:800,color:projAtGoal>=goalTarget?"#22c55e":"#f0b429"}}>
+                  <Amt v={`$${fmt(projAtGoal)}`} blurred={blurred}/>
+                </div>
+              </div>
+              <div style={{textAlign:"right"}}>
+                <div style={{fontSize:10,color:"#475569",letterSpacing:".1em",marginBottom:4}}>
+                  {projAtGoal>=goalTarget?"GOAL REACHED ✓":"SHORTFALL"}
+                </div>
+                <div style={{fontSize:18,fontWeight:700,color:projAtGoal>=goalTarget?"#22c55e":"#ef4444"}}>
+                  <Amt v={projAtGoal>=goalTarget?`+$${fmt(projAtGoal-goalTarget)}`:`-$${fmt(goalTarget-projAtGoal)}`} blurred={blurred}/>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Time to goal */}
+          {monthsToGoal!=null && (
+            <div style={{background:"#070d1a",border:"1px solid #22c55e30",borderRadius:10,padding:"12px 20px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <span style={{fontSize:11,color:"#475569"}}>AT {scenRate}% GROWTH{scenContrib>0?` + $${fmt(scenContrib)}/MO`:""}, GOAL REACHED IN</span>
+              <span style={{fontSize:16,fontWeight:700,color:"#22c55e"}}>
+                {monthsToGoal >= 12
+                  ? `${Math.floor(monthsToGoal/12)}y ${monthsToGoal%12}m`
+                  : `${monthsToGoal} months`}
+              </span>
+            </div>
+          )}
         </div>
       </div>}
 
