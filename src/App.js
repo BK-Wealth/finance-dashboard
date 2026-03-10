@@ -487,7 +487,7 @@ export default function App() {
           <span style={{color:"#f0b429",fontWeight:600}}>{fmtPct(latest["Ann Return"])} p.a.</span>{" "}
           since inception
           {narrativeGoalYr && <>
-            {" "}· at this rate, $1M reached by{" "}
+            {" "}· at this rate, <span style={{color:"#f0b429",fontWeight:600}}>${fmt(goalTarget)}</span> goal reached by{" "}
             <span style={{color:"#a78bfa",fontWeight:600}}>{narrativeGoalYr}</span>
           </>}
           {drawdown < -0.02 && <>
