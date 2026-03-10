@@ -418,20 +418,7 @@ export default function App() {
               </span>
             </div>
           </div>
-          {/* Quick stats column */}
-          <div style={{display:"flex",gap:24,flexWrap:"wrap"}}>
-            {[
-              {l:"Total Return", v:fmtPct(latest["Cumm Return"]), c:"#22c55e"},
-              {l:"Ann. CAGR",    v:fmtPct(latest["Ann Return"]),  c:"#3b82f6"},
-              {l:"All-Time Peak",v:<Amt v={`$${fmt(peak)}`} blurred={blurred}/>, c:"#f0b429"},
-              {l:"Drawdown",     v:fmtPct(drawdown), c:drawdown<-.05?"#ef4444":"#475569"},
-            ].map((s,i)=>(
-              <div key={i} style={{textAlign:"right"}}>
-                <div style={{fontSize:10,fontFamily:"'IBM Plex Mono',monospace",letterSpacing:".12em",color:"#334155",textTransform:"uppercase",marginBottom:3}}>{s.l}</div>
-                <div style={{fontSize:18,fontFamily:"'Syne',sans-serif",fontWeight:800,color:s.c}}>{s.v}</div>
-              </div>
-            ))}
-          </div>
+
         </div>
       </div>
 
