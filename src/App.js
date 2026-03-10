@@ -205,7 +205,7 @@ export default function App() {
   };
   const handleDel = (date) => { setCustom(prev=>prev.filter(m=>m.Date!==date)); setModal(false); };
   const isCustom = date => custom.some(m=>m.Date===date);
-  const TABS = ["overview","portfolio","performance","goals","insurance","manage"];
+  const TABS = ["overview","portfolio","performance","goals","budget","insurance","manage"];
 
   // Y-axis formatters that respect blur
   const yFmtDollar = v => blurred ? "●●●" : `$${(v/1000).toFixed(0)}k`;
@@ -1050,6 +1050,220 @@ export default function App() {
 
 
       {/* ── INSURANCE ── */}
+      {tab==="budget"&&(()=>{
+        const income = 13200;
+        const fixedItems = [
+          {name:"Rent",          val:4983, pct:.38},
+          {name:"Childcare",     val:1075, pct:.08},
+          {name:"Health",        val:620,  pct:.05},
+          {name:"Cleaning",      val:452,  pct:.03},
+          {name:"Subscriptions", val:280,  pct:.02},
+        ];
+        const varItems = [
+          {name:"Groceries",     val:2230, pct:.17},
+          {name:"Shopping",      val:1420, pct:.11},
+          {name:"Misc / Friction",val:1000,pct:.08},
+          {name:"Transport",     val:380,  pct:.03},
+          {name:"Kids extras",   val:280,  pct:.02},
+          {name:"Eating out",    val:260,  pct:.02},
+          {name:"Personal care", val:150,  pct:.01},
+          {name:"Travel",        val:0,    pct:0},
+        ];
+        const totalSpend = 13130;
+        const surplus    = income - totalSpend;
+        const super_     = 2250;
+        const fixedTotal = 7410;
+        const varTotal   = 5720;
+        const fixedRatio = fixedTotal / totalSpend;
+        const FIXED_COL  = "#3b82f6";
+        const VAR_COL    = "#a78bfa";
+        const BAR_H      = 8;
+
+        const CategoryRow = ({item, color, max}) => {
+          const barW = max > 0 ? (item.val / max) * 100 : 0;
+          return (
+            <div style={{display:"grid",gridTemplateColumns:"1fr 120px 70px 56px",gap:8,
+              alignItems:"center",padding:"8px 0",borderBottom:"1px solid #0a1520"}}>
+              <div style={{display:"flex",alignItems:"center",gap:10}}>
+                <div style={{flex:1,height:BAR_H,background:"#0a1520",borderRadius:4,overflow:"hidden",maxWidth:180}}>
+                  <div style={{width:`${barW}%`,height:"100%",background:color,borderRadius:4,opacity:.75,transition:"width .4s"}}/>
+                </div>
+                <span style={{fontSize:12,fontFamily:"'Inter',sans-serif",color:"#94a3b8",minWidth:110}}>{item.name}</span>
+              </div>
+              <div style={{textAlign:"right",fontSize:12,fontFamily:"'IBM Plex Mono',monospace",color:"#e2e8f0"}}>
+                <Amt v={`$${fmt(item.val)}`} blurred={blurred}/>
+              </div>
+              <div style={{textAlign:"right",fontSize:11,fontFamily:"'IBM Plex Mono',monospace",color:"#334155"}}>
+                <Amt v={`$${fmt(item.val*12)}`} blurred={blurred}/>
+              </div>
+              <div style={{textAlign:"right",fontSize:11,fontFamily:"'IBM Plex Mono',monospace",
+                color: item.pct>=.1 ? "#ef4444" : item.pct>=.05 ? "#f0b429" : "#475569"}}>
+                {item.val>0 ? `${(item.pct*100).toFixed(0)}%` : "—"}
+              </div>
+            </div>
+          );
+        };
+
+        return (
+          <div style={{display:"grid",gap:20}}>
+
+            {/* ── HERO ── */}
+            <div className="card-hero" style={{padding:"28px 32px"}}>
+              <div style={{position:"absolute",top:-40,right:-20,width:260,height:260,borderRadius:"50%",
+                background:"radial-gradient(circle,#3b82f618 0%,transparent 70%)",pointerEvents:"none"}}/>
+              <div style={{position:"relative",display:"flex",justifyContent:"space-between",alignItems:"flex-end",flexWrap:"wrap",gap:24}}>
+                <div>
+                  <div style={{fontSize:10,fontFamily:"'IBM Plex Mono',monospace",letterSpacing:".18em",color:"#475569",textTransform:"uppercase",marginBottom:8}}>Monthly Household Budget</div>
+                  <div style={{display:"flex",alignItems:"baseline",gap:12,flexWrap:"wrap"}}>
+                    <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:52,color:"#e2e8f0",lineHeight:1,letterSpacing:"-.03em"}}>
+                      <Amt v={`$${fmt(totalSpend)}`} blurred={blurred}/>
+                    </div>
+                    <div style={{fontSize:14,color:"#475569",fontFamily:"'Inter',sans-serif"}}>/ month spend</div>
+                  </div>
+                  <div style={{marginTop:10,display:"flex",gap:8,flexWrap:"wrap"}}>
+                    <span style={{display:"inline-flex",alignItems:"center",gap:5,
+                      background:"#22c55e15",border:"1px solid #22c55e30",borderRadius:20,
+                      padding:"4px 12px",fontSize:12,fontFamily:"'Inter',sans-serif",color:"#22c55e",fontWeight:600}}>
+                      +<Amt v={`$${fmt(surplus)}`} blurred={blurred}/> surplus
+                    </span>
+                    <span style={{display:"inline-flex",alignItems:"center",gap:5,
+                      background:"#06b6d415",border:"1px solid #06b6d430",borderRadius:20,
+                      padding:"4px 12px",fontSize:12,fontFamily:"'Inter',sans-serif",color:"#06b6d4",fontWeight:600}}>
+                      +<Amt v={`$${fmt(super_)}`} blurred={blurred}/> super (employer)
+                    </span>
+                  </div>
+                </div>
+                {/* Income vs spend mini summary */}
+                <div style={{display:"flex",flexDirection:"column",gap:12,minWidth:180}}>
+                  {[
+                    {l:"Net Take-Home", v:income,     c:"#22c55e"},
+                    {l:"Total Spend",   v:totalSpend, c:"#e2e8f0"},
+                    {l:"Annual Spend",  v:157560,     c:"#f0b429", annual:true},
+                  ].map((r,i)=>(
+                    <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:16}}>
+                      <span style={{fontSize:10,fontFamily:"'IBM Plex Mono',monospace",letterSpacing:".1em",color:"#334155",textTransform:"uppercase"}}>{r.l}</span>
+                      <span style={{fontSize:14,fontFamily:"'Syne',sans-serif",fontWeight:800,color:r.c}}>
+                        <Amt v={`$${fmt(r.v)}`} blurred={blurred}/>
+                        {r.annual&&<span style={{fontSize:10,color:"#334155",marginLeft:2}}>/yr</span>}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* ── FIXED vs VARIABLE VISUAL ── */}
+            <div className="card">
+              <div className="chart-label"><span>Fixed vs Variable Split</span></div>
+              {/* Stacked proportion bar */}
+              <div style={{display:"flex",height:14,borderRadius:8,overflow:"hidden",marginBottom:20,gap:2}}>
+                <div style={{flex:fixedRatio,background:FIXED_COL,opacity:.8,borderRadius:"6px 0 0 6px",
+                  display:"flex",alignItems:"center",justifyContent:"center"}}>
+                  <span style={{fontSize:9,fontFamily:"'IBM Plex Mono',monospace",color:"#fff",fontWeight:700,letterSpacing:".05em"}}>
+                    {(fixedRatio*100).toFixed(0)}%
+                  </span>
+                </div>
+                <div style={{flex:1-fixedRatio,background:VAR_COL,opacity:.8,borderRadius:"0 6px 6px 0",
+                  display:"flex",alignItems:"center",justifyContent:"center"}}>
+                  <span style={{fontSize:9,fontFamily:"'IBM Plex Mono',monospace",color:"#fff",fontWeight:700,letterSpacing:".05em"}}>
+                    {((1-fixedRatio)*100).toFixed(0)}%
+                  </span>
+                </div>
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
+                {[
+                  {label:"Fixed Costs",    total:fixedTotal, color:FIXED_COL, tag:"Committed spending you can't easily cut"},
+                  {label:"Variable Lifestyle",total:varTotal,color:VAR_COL,  tag:"Discretionary — adjustable if needed"},
+                ].map(s=>(
+                  <div key={s.label} style={{background:"#0a1520",borderRadius:10,padding:"16px",borderLeft:`3px solid ${s.color}`}}>
+                    <div style={{fontSize:10,fontFamily:"'IBM Plex Mono',monospace",letterSpacing:".12em",color:s.color,marginBottom:6,textTransform:"uppercase"}}>{s.label}</div>
+                    <div style={{fontSize:24,fontFamily:"'Syne',sans-serif",fontWeight:800,color:"#e2e8f0",marginBottom:4}}>
+                      <Amt v={`$${fmt(s.total)}`} blurred={blurred}/>
+                    </div>
+                    <div style={{fontSize:11,color:"#334155",fontFamily:"'Inter',sans-serif"}}>{s.tag}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* ── LINE ITEMS ── */}
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20}}>
+
+              {/* Fixed */}
+              <div className="card">
+                <div className="chart-label">
+                  <span style={{display:"flex",alignItems:"center",gap:8}}>
+                    <span style={{width:8,height:8,borderRadius:2,background:FIXED_COL,display:"inline-block"}}/>
+                    Fixed Costs
+                  </span>
+                  <span style={{fontSize:12,fontFamily:"'IBM Plex Mono',monospace",color:"#3b82f6",fontWeight:700}}>
+                    <Amt v={`$${fmt(fixedTotal)}/mo`} blurred={blurred}/>
+                  </span>
+                </div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 90px 60px 42px",gap:8,padding:"4px 0 8px",marginBottom:4}}>
+                  {["","Monthly","Annual","%"].map((h,i)=>(
+                    <div key={i} className="t-label" style={{textAlign:i>0?"right":"left",fontSize:9}}>{h}</div>
+                  ))}
+                </div>
+                {fixedItems.map(item=>(
+                  <CategoryRow key={item.name} item={item} color={FIXED_COL} max={fixedItems[0].val}/>
+                ))}
+                <div style={{display:"flex",justifyContent:"space-between",padding:"10px 0 0",marginTop:4}}>
+                  <span style={{fontSize:10,fontFamily:"'IBM Plex Mono',monospace",color:"#475569",letterSpacing:".1em"}}>SUBTOTAL</span>
+                  <span style={{fontSize:13,fontFamily:"'IBM Plex Mono',monospace",fontWeight:700,color:FIXED_COL}}>
+                    <Amt v={`$${fmt(fixedTotal)}`} blurred={blurred}/>
+                  </span>
+                </div>
+              </div>
+
+              {/* Variable */}
+              <div className="card">
+                <div className="chart-label">
+                  <span style={{display:"flex",alignItems:"center",gap:8}}>
+                    <span style={{width:8,height:8,borderRadius:2,background:VAR_COL,display:"inline-block"}}/>
+                    Variable Lifestyle
+                  </span>
+                  <span style={{fontSize:12,fontFamily:"'IBM Plex Mono',monospace",color:VAR_COL,fontWeight:700}}>
+                    <Amt v={`$${fmt(varTotal)}/mo`} blurred={blurred}/>
+                  </span>
+                </div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 90px 60px 42px",gap:8,padding:"4px 0 8px",marginBottom:4}}>
+                  {["","Monthly","Annual","%"].map((h,i)=>(
+                    <div key={i} className="t-label" style={{textAlign:i>0?"right":"left",fontSize:9}}>{h}</div>
+                  ))}
+                </div>
+                {varItems.map(item=>(
+                  <CategoryRow key={item.name} item={item} color={VAR_COL} max={varItems[0].val}/>
+                ))}
+                <div style={{display:"flex",justifyContent:"space-between",padding:"10px 0 0",marginTop:4}}>
+                  <span style={{fontSize:10,fontFamily:"'IBM Plex Mono',monospace",color:"#475569",letterSpacing:".1em"}}>SUBTOTAL</span>
+                  <span style={{fontSize:13,fontFamily:"'IBM Plex Mono',monospace",fontWeight:700,color:VAR_COL}}>
+                    <Amt v={`$${fmt(varTotal)}`} blurred={blurred}/>
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* ── RUNWAY / RATIOS ── */}
+            <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12}}>
+              {[
+                {l:"Savings Rate",     v:`${((surplus/income)*100).toFixed(1)}%`,       sub:"of net take-home",    c:"#22c55e"},
+                {l:"Fixed Cost Ratio", v:`${(fixedRatio*100).toFixed(0)}%`,             sub:"of monthly spend",    c:"#3b82f6"},
+                {l:"Annual Wealth Build",v:<Amt v={`$${fmt(surplus*12+super_*12)}`} blurred={blurred}/>, sub:"surplus + super",  c:"#f0b429"},
+                {l:"Rent Burden",      v:`${((4983/income)*100).toFixed(0)}%`,          sub:"of net income on rent",c:4983/income>.35?"#ef4444":"#f0b429"},
+              ].map((k,i)=>(
+                <div key={i} className="card" style={{animationDelay:`${i*60}ms`}}>
+                  <div className="t-label" style={{marginBottom:6}}>{k.l}</div>
+                  <div style={{fontSize:22,fontFamily:"'Syne',sans-serif",fontWeight:800,color:k.c,lineHeight:1.1}}>{k.v}</div>
+                  <div className="t-caption" style={{marginTop:5}}>{k.sub}</div>
+                </div>
+              ))}
+            </div>
+
+          </div>
+        );
+      })()}
+
       {tab==="insurance"&&<div style={{display:"grid",gap:20}}>
 
         {/* Bradley */}
