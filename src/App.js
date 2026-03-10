@@ -107,6 +107,13 @@ export default function App() {
   const [goalDate,   setGoalDate]   = useState(() => { try { return localStorage.getItem("fin-goal-date")||"2030-01"; } catch { return "2030-01"; }});
   const [scenRate,   setScenRate]   = useState(30);
   const [scenContrib,setScenContrib]= useState(0);
+  const [goalRaw,    setGoalRaw]    = useState(false); // true while input is focused
+
+  const fmtGoalDisplay = (raw) => {
+    const n = parseFloat(String(raw).replace(/,/g,""));
+    if (isNaN(n)) return raw;
+    return n.toLocaleString("en-AU");
+  };
 
   const data = useMemo(() => mergeData(SEED_DATA, custom), [custom]);
   if (!data || data.length === 0) return <div style={{color:"white",padding:40}}>Loading...</div>;
@@ -196,6 +203,27 @@ export default function App() {
     while (pv < goalTarget && m < 600) { pv = pv*(1+r)+scenContrib; m++; }
     return m < 600 ? m : null;
   })();
+
+  // ── Scenario chart data — project monthly for up to 10 years ──
+  const scenChartData = useMemo(() => {
+    const months = 120;
+    const histRate = latest["Ann Return"] / 12;
+    const gt = parseFloat(String(goalAmount).replace(/,/g,"")) || 1000000;
+    const rows = [];
+    const now = new Date();
+    for (let m = 0; m <= months; m++) {
+      const date = new Date(now.getFullYear(), now.getMonth() + m, 1);
+      const label = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}`;
+      const r = scenRate / 100 / 12;
+      const projected = r === 0
+        ? latest.Total + scenContrib * m
+        : latest.Total * Math.pow(1+r,m) + scenContrib * ((Math.pow(1+r,m)-1)/r);
+      const historical = latest.Total * Math.pow(1 + histRate, m);
+      rows.push({ label, projected: Math.round(projected), historical: Math.round(historical), target: Math.round(gt) });
+    }
+    return rows;
+  // eslint-disable-next-line
+  }, [latest.Total, latest["Ann Return"], scenRate, scenContrib, goalAmount]);
 
   return (
     <div style={{minHeight:"100vh",background:"#070d1a",color:"#e2e8f0",fontFamily:"'IBM Plex Mono',monospace",padding:"28px 24px"}} id="main-wrap">
@@ -491,10 +519,21 @@ export default function App() {
           <div style={{fontSize:10,color:"#475569",letterSpacing:".12em",marginBottom:16}}>PORTFOLIO GOAL</div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"12px 20px",marginBottom:20}}>
             <div>
-              <label style={{fontSize:10,color:"#475569",letterSpacing:".1em",display:"block",marginBottom:6}}>TARGET AMOUNT ($)</label>
-              <input className="inp" type="number" value={goalAmount}
-                onChange={e=>{setGoalAmount(e.target.value);try{localStorage.setItem("fin-goal-amt",e.target.value)}catch{}}}
-                placeholder="1000000"/>
+              <label style={{fontSize:10,color:"#475569",letterSpacing:".1em",display:"block",marginBottom:6}}>TARGET AMOUNT</label>
+              <div style={{position:"relative"}}>
+                <span style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",color:"#475569",fontSize:13,pointerEvents:"none"}}>$</span>
+                <input className="inp" style={{paddingLeft:22}}
+                  type={goalRaw?"number":"text"}
+                  value={goalRaw ? goalAmount : fmtGoalDisplay(goalAmount)}
+                  onFocus={()=>setGoalRaw(true)}
+                  onBlur={()=>setGoalRaw(false)}
+                  onChange={e=>{
+                    const v = e.target.value.replace(/,/g,"");
+                    setGoalAmount(v);
+                    try{localStorage.setItem("fin-goal-amt",v)}catch{}
+                  }}
+                  placeholder="1,000,000"/>
+              </div>
             </div>
             <div>
               <label style={{fontSize:10,color:"#475569",letterSpacing:".1em",display:"block",marginBottom:6}}>TARGET DATE (YYYY-MM)</label>
@@ -558,7 +597,7 @@ export default function App() {
             </div>
           </div>
 
-          {/* Projections */}
+          {/* Projection KPI row */}
           <div className="kpi-grid" style={{gap:10,marginBottom:20}}>
             {scenYears.map(s=>(
               <div key={s.label} style={{background:"#070d1a",borderRadius:8,padding:"12px 10px",border:"1px solid #1e293b",textAlign:"center"}}>
@@ -569,6 +608,45 @@ export default function App() {
                 </div>
               </div>
             ))}
+          </div>
+
+          {/* Scenario line chart */}
+          <div style={{marginBottom:16}}>
+            <div style={{display:"flex",gap:20,marginBottom:10,flexWrap:"wrap"}}>
+              <div style={{display:"flex",alignItems:"center",gap:6,fontSize:11,color:"#94a3b8"}}>
+                <span style={{display:"inline-block",width:24,height:2,background:"#f0b429",borderRadius:2}}/> Scenario ({scenRate}%{scenContrib>0?` + $${fmt(scenContrib)}/mo`:""})
+              </div>
+              <div style={{display:"flex",alignItems:"center",gap:6,fontSize:11,color:"#94a3b8"}}>
+                <span style={{display:"inline-block",width:24,height:2,background:"#3b82f6",borderRadius:2,borderTop:"2px dashed #3b82f6"}}/> Historical trajectory ({fmtPct(latest["Ann Return"])} p.a.)
+              </div>
+              <div style={{display:"flex",alignItems:"center",gap:6,fontSize:11,color:"#94a3b8"}}>
+                <span style={{display:"inline-block",width:24,height:2,background:"#22c55e",borderRadius:2,opacity:.7}}/> Target
+              </div>
+            </div>
+            <ResponsiveContainer width="100%" height={280}>
+              <LineChart data={scenChartData} margin={{top:4,right:4,left:8,bottom:0}}>
+                <defs>
+                  <linearGradient id="gScen" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#f0b429" stopOpacity={0.15}/>
+                    <stop offset="95%" stopColor="#f0b429" stopOpacity={0}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false}/>
+                <XAxis dataKey="label" tick={TICK_SM} tickLine={false} axisLine={false}
+                  ticks={scenChartData.filter((_,i)=>i%12===0).map(d=>d.label)}
+                  tickFormatter={v=>v?v.slice(0,4):""}/>
+                <YAxis tick={TICK_SM} tickLine={false} axisLine={false}
+                  tickFormatter={v=>blurred?"●●●":`$${(v/1000).toFixed(0)}k`} width={55}/>
+                <Tooltip
+                  formatter={(v,name)=>[blurred?"●●●":`$${fmt(v)}`, name]}
+                  labelStyle={{color:"#e2e8f0",fontFamily:"IBM Plex Mono",fontSize:11}}
+                  contentStyle={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:8,fontSize:12,fontFamily:"IBM Plex Mono"}}
+                  itemStyle={{color:"#94a3b8"}}/>
+                <Line type="monotone" dataKey="projected" stroke="#f0b429" strokeWidth={2.5} dot={false} name="Scenario" activeDot={{r:4,fill:"#f0b429"}}/>
+                <Line type="monotone" dataKey="historical" stroke="#3b82f6" strokeWidth={1.5} strokeDasharray="5 4" dot={false} name="Historical rate" activeDot={{r:4,fill:"#3b82f6"}}/>
+                <Line type="monotone" dataKey="target" stroke="#22c55e" strokeWidth={1} strokeDasharray="3 3" dot={false} name="Target" activeDot={false}/>
+              </LineChart>
+            </ResponsiveContainer>
           </div>
 
           {/* Goal projection at target date */}
