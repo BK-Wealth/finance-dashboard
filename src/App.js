@@ -142,6 +142,8 @@ export default function App() {
   const [scenRate,   setScenRate]   = useState(30);
   const [scenContrib,setScenContrib]= useState(0);
   const [scenView,   setScenView]   = useState("zoom"); // "zoom" | "full"
+  const [superGrowth, setSuperGrowth] = useState(10);   // % p.a.
+  const [superContrib, setSuperContrib] = useState(2250); // $/mo
   const [goalRaw,    setGoalRaw]    = useState(false); // true while input is focused
 
   const fmtGoalDisplay = (raw) => {
@@ -539,6 +541,68 @@ export default function App() {
             </div>
           ))}
         </div>
+
+        {/* ── INSIGHTS ── */}
+        {(()=>{
+          const cashMonths = (latest.Cash||0) / 13130;
+          const eeAlloc    = (latest.EE||0) / latest.Total;
+          const equitiesAlloc = ((latest.EE||0)+(latest.Stake||0)+(latest.Super||0)) / latest.Total;
+          const bradleyIP  = 10825 + 12629; // monthly IP cover
+          const insights   = [
+            {
+              icon:"⚠️",
+              label:"Asset Concentration",
+              status: eeAlloc > 0.30 ? "warn" : "ok",
+              text: eeAlloc > 0.30
+                ? `EE is ${(eeAlloc*100).toFixed(0)}% of your portfolio — above the 30% single-asset threshold. Consider rebalancing as it grows.`
+                : `EE is ${(eeAlloc*100).toFixed(0)}% of portfolio. Concentration within acceptable range.`,
+            },
+            {
+              icon:"🏦",
+              label:"Emergency Fund",
+              status: cashMonths < 3 ? "warn" : cashMonths < 6 ? "caution" : "ok",
+              text: cashMonths < 3
+                ? `${cashMonths.toFixed(1)} months of expenses in cash ($${fmt(latest.Cash||0)}). Target is 3–6 months ($39k–$79k).`
+                : `${cashMonths.toFixed(1)} months of expenses covered by cash. Within the 3–6 month target range.`,
+            },
+            {
+              icon:"🛡️",
+              label:"Insurance Coverage",
+              status: "ok",
+              text: `Bradley covered for $${fmt(bradleyIP)}/mo IP across two policies. Life cover $${fmt(1581625)} + TPD $${fmt(421766)}. Martine: Life + Trauma $${fmt(406712)} each.`,
+            },
+            {
+              icon:"📈",
+              label:"Equity Exposure",
+              status: equitiesAlloc > 0.70 ? "caution" : "ok",
+              text: `${(equitiesAlloc*100).toFixed(0)}% of portfolio is equities (EE + Stake + Super). ${equitiesAlloc>0.70?"High growth bias — appropriate for long time horizon but watch volatility.":"Balanced exposure across equity and alternative assets."}`,
+            },
+          ];
+          const statusColor = {ok:"#22c55e", warn:"#ef4444", caution:"#f0b429"};
+          const statusBg    = {ok:"#22c55e12", warn:"#ef444412", caution:"#f0b42912"};
+          const statusBorder= {ok:"#22c55e25", warn:"#ef444425", caution:"#f0b42925"};
+          return (
+            <div className="card">
+              <div className="chart-label"><span>Insights</span><span style={{fontSize:10,color:"#1e3050"}}>Auto-generated · {latest.Date}</span></div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                {insights.map((ins,i)=>(
+                  <div key={i} style={{
+                    background:statusBg[ins.status],
+                    border:`1px solid ${statusBorder[ins.status]}`,
+                    borderLeft:`3px solid ${statusColor[ins.status]}`,
+                    borderRadius:10, padding:"12px 14px",
+                  }}>
+                    <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:5}}>
+                      <span style={{fontSize:14}}>{ins.icon}</span>
+                      <span style={{fontSize:10,fontFamily:"'IBM Plex Mono',monospace",letterSpacing:".1em",color:statusColor[ins.status],textTransform:"uppercase",fontWeight:700}}>{ins.label}</span>
+                    </div>
+                    <p style={{fontSize:12,fontFamily:"'Inter',sans-serif",color:"#94a3b8",lineHeight:1.55,margin:0}}>{ins.text}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
       </div>}
 
       {/* ── BREAKDOWN ── */}
@@ -1044,6 +1108,141 @@ export default function App() {
             </div>
           )}
         </div>
+
+        {/* ── SUPER PROJECTION ── */}
+        {(()=>{
+          const INFLATION   = 0.03;
+          const GROWTH      = superGrowth / 100;
+          const CONTRIB_NOW = superContrib;
+          const SUPER_NOW   = latest.Super || 137817;
+          const retireAge   = 65;
+          const currentYear = new Date().getFullYear();
+          // Assume Bradley is ~35 — 30 years to retirement
+          const yearsLeft   = 30;
+          const monthsLeft  = yearsLeft * 12;
+          const r = GROWTH / 12;
+          const inflationR  = INFLATION / 12;
+
+          // Project super with inflation-growing contributions
+          let bal = SUPER_NOW;
+          let contrib = CONTRIB_NOW;
+          const chartData = [{yr: currentYear, bal: Math.round(bal)}];
+          for (let m = 1; m <= monthsLeft; m++) {
+            bal = bal * (1 + r) + contrib;
+            if (m % 12 === 0) {
+              contrib *= (1 + INFLATION);
+              chartData.push({yr: currentYear + m/12, bal: Math.round(bal)});
+            }
+          }
+          const retirementBal = bal;
+          // Safe withdrawal rate 4%
+          const annualIncome  = retirementBal * 0.04;
+          const monthlyIncome = annualIncome / 12;
+
+          // Milestones
+          const milestones = [250000, 500000, 1000000, 2000000];
+          const msDates = milestones.map(ms => {
+            let b = SUPER_NOW, c = CONTRIB_NOW, m = 0;
+            while (b < ms && m < monthsLeft) { b = b*(1+r)+c; if(m%12===0&&m>0) c*=(1+INFLATION); m++; }
+            if (b < ms) return null;
+            const yr = currentYear + m/12;
+            return {ms, yr: yr.toFixed(1), age: (35 + m/12).toFixed(0)};
+          });
+
+          return (
+            <div className="card">
+              <div className="chart-label">
+                <span>Super Projection</span>
+              </div>
+
+              {/* Sliders */}
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"12px 24px",marginBottom:20,padding:"14px 16px",background:"#070d1a",borderRadius:10,border:"1px solid #1e293b"}}>
+                <div>
+                  <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
+                    <label style={{fontSize:10,fontFamily:"'IBM Plex Mono',monospace",letterSpacing:".1em",color:"#475569"}}>ANNUAL GROWTH RATE</label>
+                    <span style={{fontSize:12,fontFamily:"'IBM Plex Mono',monospace",color:"#06b6d4",fontWeight:700}}>{superGrowth}%</span>
+                  </div>
+                  <input type="range" min={3} max={20} step={0.5} value={superGrowth}
+                    onChange={e=>setSuperGrowth(Number(e.target.value))}
+                    style={{width:"100%",accentColor:"#06b6d4"}}/>
+                  <div style={{display:"flex",justifyContent:"space-between",fontSize:10,color:"#334155",marginTop:3,fontFamily:"'IBM Plex Mono',monospace"}}>
+                    <span>3%</span><span>20%</span>
+                  </div>
+                </div>
+                <div>
+                  <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
+                    <label style={{fontSize:10,fontFamily:"'IBM Plex Mono',monospace",letterSpacing:".1em",color:"#475569"}}>MONTHLY CONTRIBUTION</label>
+                    <span style={{fontSize:12,fontFamily:"'IBM Plex Mono',monospace",color:"#06b6d4",fontWeight:700}}>${fmt(superContrib)}</span>
+                  </div>
+                  <input type="range" min={500} max={10000} step={250} value={superContrib}
+                    onChange={e=>setSuperContrib(Number(e.target.value))}
+                    style={{width:"100%",accentColor:"#06b6d4"}}/>
+                  <div style={{display:"flex",justifyContent:"space-between",fontSize:10,color:"#334155",marginTop:3,fontFamily:"'IBM Plex Mono',monospace"}}>
+                    <span>$500</span><span>$10,000</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Hero value at retirement */}
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12,marginBottom:20}}>
+                {[
+                  {l:"Current Balance",   v:<Amt v={`$${fmt(SUPER_NOW)}`} blurred={blurred}/>,        c:"#94a3b8"},
+                  {l:`Balance at ${retireAge}`, v:<Amt v={`$${fmt(Math.round(retirementBal))}`} blurred={blurred}/>, c:"#06b6d4"},
+                  {l:"Est. Monthly Income", v:<Amt v={`$${fmt(Math.round(monthlyIncome))}`} blurred={blurred}/>,    c:"#22c55e",
+                   sub:"at 4% drawdown rate"},
+                ].map((k,i)=>(
+                  <div key={i} style={{background:"#070d1a",borderRadius:10,padding:"14px 16px",border:"1px solid #1e293b",
+                    ...(i===1?{border:"1px solid #06b6d430",background:"#06b6d408"}:{})}}>
+                    <div style={{fontSize:10,fontFamily:"'IBM Plex Mono',monospace",letterSpacing:".1em",color:"#475569",marginBottom:6,textTransform:"uppercase"}}>{k.l}</div>
+                    <div style={{fontSize:i===1?22:18,fontFamily:"'Syne',sans-serif",fontWeight:800,color:k.c}}>{k.v}</div>
+                    {k.sub&&<div style={{fontSize:10,color:"#334155",fontFamily:"'Inter',sans-serif",marginTop:3}}>{k.sub}</div>}
+                  </div>
+                ))}
+              </div>
+
+              {/* Growth chart */}
+              <ResponsiveContainer width="100%" height={180}>
+                <AreaChart data={chartData} margin={{top:4,right:8,left:8,bottom:0}}>
+                  <defs>
+                    <linearGradient id="gSuper" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%"  stopColor="#06b6d4" stopOpacity={.25}/>
+                      <stop offset="100%" stopColor="#06b6d4" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="2 4" stroke="#0f1e33" vertical={false}/>
+                  <XAxis dataKey="yr" tick={TICK_SM} tickLine={false} axisLine={false}
+                    tickFormatter={v=>Math.round(v)} ticks={chartData.filter((_,i)=>i%5===0).map(d=>d.yr)}/>
+                  <YAxis tick={TICK_SM} tickLine={false} axisLine={false}
+                    tickFormatter={v=>blurred?"●●●":`$${(v/1000000).toFixed(1)}M`} width={52}/>
+                  <Tooltip
+                    formatter={v=>[blurred?"●●●":`$${fmt(v)}`,"Balance"]}
+                    labelFormatter={v=>`Year ${Math.round(v)}`}
+                    contentStyle={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:8,fontSize:12,fontFamily:"IBM Plex Mono"}}
+                    labelStyle={{color:"#e2e8f0"}} itemStyle={{color:"#06b6d4"}}/>
+                  <Area type="monotone" dataKey="bal" stroke="#06b6d4" strokeWidth={2}
+                    fill="url(#gSuper)" dot={false} activeDot={{r:4,fill:"#06b6d4",stroke:"#070d1a",strokeWidth:2}}/>
+                </AreaChart>
+              </ResponsiveContainer>
+
+              {/* Milestone markers */}
+              <div style={{display:"flex",gap:8,marginTop:16,flexWrap:"wrap"}}>
+                {msDates.filter(Boolean).map((ms,i)=>(
+                  <div key={i} style={{flex:1,minWidth:110,background:"#0a1520",borderRadius:8,padding:"10px 12px",border:"1px solid #1e293b"}}>
+                    <div style={{fontSize:10,fontFamily:"'IBM Plex Mono',monospace",color:"#06b6d4",letterSpacing:".08em",marginBottom:3}}>
+                      ${ms.ms>=1000000?`${ms.ms/1000000}M`:`${ms.ms/1000}k`}
+                    </div>
+                    <div style={{fontSize:13,fontFamily:"'Syne',sans-serif",fontWeight:800,color:"#e2e8f0"}}>{Math.round(ms.yr)}</div>
+                    <div style={{fontSize:10,color:"#334155",fontFamily:"'Inter',sans-serif"}}>Age ~{ms.age}</div>
+                  </div>
+                ))}
+              </div>
+
+              <div style={{marginTop:12,fontSize:11,fontFamily:"'Inter',sans-serif",color:"#334155",lineHeight:1.5}}>
+                Assumes {superGrowth}% p.a. growth, ${fmt(superContrib)}/mo contributions indexed at 3% annual inflation, {yearsLeft} years to retirement. Not financial advice.
+              </div>
+            </div>
+          );
+        })()}
       </div>}
 
 
